@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Every step runs even when an earlier one fails, so a single push reports every problem rather
+# than one per round trip.
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: pnpm lint
+
+      - name: Format
+        if: ${{ !cancelled() }}
+        run: pnpm format:check
+
+      - name: Test
+        if: ${{ !cancelled() }}
+        run: pnpm test
+
+      - name: Build
+        if: ${{ !cancelled() }}
+        run: pnpm build

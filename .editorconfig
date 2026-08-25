@@ -1,0 +1,16 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# GEDCOM is a line-oriented format where trailing spaces can be significant inside CONC/CONT
+# continuations, and the encoding is declared by the file's own header rather than by us.
+[*.ged]
+charset = unset
+trim_trailing_whitespace = false
+insert_final_newline = false

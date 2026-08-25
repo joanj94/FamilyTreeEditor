@@ -1,0 +1,416 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joanj94/FamilyTreeEditor/schema/gedcom7.schema.json",
+  "title": "GEDCOM 7 family tree document",
+  "description": "The JSON form of a FamilySearch GEDCOM 7.0 dataset. Structure, tag names, enumerations and date grammar mirror the standard, so that a document here and the .ged file it came from describe the same thing in the same terms. Structures this schema does not model are preserved verbatim under 'extensions' rather than dropped, which is what makes a round trip lossless by construction.",
+  "type": "object",
+  "required": ["header", "individuals", "families"],
+  "additionalProperties": false,
+  "properties": {
+    "header": { "$ref": "#/$defs/header" },
+    "individuals": { "type": "array", "items": { "$ref": "#/$defs/individual" } },
+    "families": { "type": "array", "items": { "$ref": "#/$defs/family" } },
+    "otherRecords": {
+      "type": "array",
+      "description": "Records this schema does not model - SOUR, REPO, OBJE, SNOTE, SUBM and any extension record - kept verbatim so export can put them back exactly as they arrived.",
+      "items": { "$ref": "#/$defs/record" }
+    },
+    "origin": { "$ref": "#/$defs/origin" }
+  },
+  "$defs": {
+    "xref": {
+      "type": "string",
+      "description": "A record's own cross-reference identifier. Spec grammar: Xref = atsign 1*tagchar atsign, where tagchar is an upper-case letter, a digit or an underscore. A record may not identify itself as @VOID@.",
+      "pattern": "^@[A-Z0-9_]+@$",
+      "not": { "const": "@VOID@" }
+    },
+    "pointer": {
+      "type": "string",
+      "description": "A reference to a record. Unlike an identifier this may be @VOID@, which the standard defines as a deliberate reference to no record.",
+      "pattern": "^@[A-Z0-9_]+@$"
+    },
+    "tag": {
+      "type": "string",
+      "description": "A structure tag. Standard tags are upper-case letters and digits; an extension tag begins with an underscore.",
+      "pattern": "^[A-Z_][A-Z0-9_]*$"
+    },
+    "structure": {
+      "type": "object",
+      "description": "One GEDCOM line and everything nested beneath it, held exactly as parsed. This is the preservation form: it models nothing and therefore loses nothing.",
+      "required": ["tag"],
+      "additionalProperties": false,
+      "properties": {
+        "tag": { "$ref": "#/$defs/tag" },
+        "payload": {
+          "type": ["string", "null"],
+          "description": "The line value as written, whether text or a pointer. Null distinguishes a line with no payload from one whose payload is the empty string."
+        },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/structure" } }
+      }
+    },
+    "record": {
+      "type": "object",
+      "description": "A top-level record kept verbatim, identifier included.",
+      "required": ["xref", "tag"],
+      "additionalProperties": false,
+      "properties": {
+        "xref": { "$ref": "#/$defs/xref" },
+        "tag": { "$ref": "#/$defs/tag" },
+        "payload": { "type": ["string", "null"] },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/structure" } }
+      }
+    },
+    "extensions": {
+      "type": "array",
+      "description": "Substructures of the enclosing record that this schema does not model - standard tags outside the modelled set as much as user-defined underscore tags. Order is the order they appeared in.",
+      "items": { "$ref": "#/$defs/structure" }
+    },
+    "calendarDate": {
+      "type": "object",
+      "description": "One parsed date point. Precision is carried by which fields are present: a date known only to the year has no month and no day, so a false precision cannot be expressed.",
+      "additionalProperties": false,
+      "properties": {
+        "calendar": {
+          "type": "string",
+          "description": "GREGORIAN, JULIAN, FRENCH_R or HEBREW per the standard, or an extension calendar tag."
+        },
+        "year": { "type": "integer" },
+        "month": { "type": "integer", "minimum": 1, "maximum": 13 },
+        "day": { "type": "integer", "minimum": 1, "maximum": 31 },
+        "epoch": { "type": "string", "description": "BCE, or an extension epoch tag." }
+      }
+    },
+    "date": {
+      "type": "object",
+      "description": "A DATE payload. The 'value' field is that payload verbatim and is authoritative; every other field is a best-effort reading of it. Export writes 'value' back, so a date this parser did not understand still leaves the tool exactly as it arrived.",
+      "required": ["value"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": "string" },
+        "kind": {
+          "description": "Which DateValue production the payload matched: date, dateApprox, dateRange, DatePeriod, or none of them.",
+          "enum": ["EXACT", "APPROXIMATE", "RANGE", "PERIOD", "UNPARSED"]
+        },
+        "modifier": {
+          "description": "The keyword the payload opened with. ABT, CAL and EST form a dateApprox; BEF, AFT and BET a dateRange; FROM and TO a DatePeriod.",
+          "enum": ["ABT", "CAL", "EST", "BEF", "AFT", "BET", "FROM", "TO"]
+        },
+        "start": { "$ref": "#/$defs/calendarDate" },
+        "end": { "$ref": "#/$defs/calendarDate" },
+        "phrase": {
+          "type": "string",
+          "description": "The PHRASE substructure: what the source actually said, for a date that cannot be expressed in the standard grammar."
+        }
+      }
+    },
+    "place": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The PLAC payload: comma-separated jurisdictions, smallest first."
+        },
+        "form": {
+          "type": "string",
+          "description": "The FORM substructure naming those jurisdictions."
+        },
+        "language": { "type": "string" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "name": {
+      "type": "object",
+      "description": "A NAME structure and its personal name pieces. Every piece is a list because the standard allows each of them more than once - which is how a name carrying two surnames is expressed, without a tool having to invent a field for the second.",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "The NAME payload as written, surname delimited by slashes. Authoritative; the pieces below are the parsed reading of it."
+        },
+        "type": {
+          "description": "The TYPE substructure.",
+          "enum": ["AKA", "BIRTH", "IMMIGRANT", "MAIDEN", "MARRIED", "PROFESSIONAL", "OTHER"]
+        },
+        "typePhrase": {
+          "type": "string",
+          "description": "PHRASE under TYPE, which the standard requires when TYPE is OTHER."
+        },
+        "prefix": { "type": "array", "items": { "type": "string" }, "description": "NPFX" },
+        "given": { "type": "array", "items": { "type": "string" }, "description": "GIVN" },
+        "nickname": { "type": "array", "items": { "type": "string" }, "description": "NICK" },
+        "surnamePrefix": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "SPFX"
+        },
+        "surname": { "type": "array", "items": { "type": "string" }, "description": "SURN" },
+        "suffix": { "type": "array", "items": { "type": "string" }, "description": "NSFX" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "individualEvent": {
+      "type": "object",
+      "required": ["tag"],
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "enum": [
+            "BIRT",
+            "CHR",
+            "DEAT",
+            "BURI",
+            "CREM",
+            "ADOP",
+            "BAPM",
+            "BARM",
+            "BASM",
+            "BLES",
+            "CHRA",
+            "CONF",
+            "FCOM",
+            "ORDN",
+            "NATU",
+            "EMIG",
+            "IMMI",
+            "CENS",
+            "PROB",
+            "WILL",
+            "GRAD",
+            "RETI",
+            "EVEN"
+          ]
+        },
+        "date": { "$ref": "#/$defs/date" },
+        "place": { "$ref": "#/$defs/place" },
+        "age": {
+          "type": "string",
+          "description": "The AGE payload, in the standard's age grammar."
+        },
+        "agePhrase": { "type": "string" },
+        "type": {
+          "type": "string",
+          "description": "The TYPE substructure, which the standard requires for EVEN."
+        },
+        "cause": { "type": "string", "description": "CAUS" },
+        "occurred": {
+          "type": "boolean",
+          "description": "True where the payload was 'Y': the event is asserted to have happened, with no further detail. Absent where detail was given, since the assertion is then implied."
+        },
+        "familyAsChild": {
+          "$ref": "#/$defs/pointer",
+          "description": "The FAMC substructure the standard allows on BIRT, CHR and ADOP."
+        },
+        "adoptedBy": {
+          "description": "ADOP under FAMC: which parent of that family adopted.",
+          "enum": ["HUSB", "WIFE", "BOTH"]
+        },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "individualAttribute": {
+      "type": "object",
+      "description": "An individual attribute. The standard separates these from events because an attribute states a value - an occupation, a title - where an event states that something happened.",
+      "required": ["tag"],
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "enum": [
+            "CAST",
+            "DSCR",
+            "EDUC",
+            "IDNO",
+            "NATI",
+            "NCHI",
+            "NMR",
+            "OCCU",
+            "PROP",
+            "RELI",
+            "RESI",
+            "TITL",
+            "FACT"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "description": "The attribute's payload: the occupation, the title, the number of children."
+        },
+        "date": { "$ref": "#/$defs/date" },
+        "place": { "$ref": "#/$defs/place" },
+        "age": { "type": "string" },
+        "agePhrase": { "type": "string" },
+        "type": {
+          "type": "string",
+          "description": "The TYPE substructure, which the standard requires for FACT."
+        },
+        "cause": { "type": "string" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "familyEvent": {
+      "type": "object",
+      "required": ["tag"],
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "enum": [
+            "ANUL",
+            "CENS",
+            "DIV",
+            "DIVF",
+            "ENGA",
+            "MARB",
+            "MARC",
+            "MARL",
+            "MARR",
+            "MARS",
+            "EVEN"
+          ]
+        },
+        "date": { "$ref": "#/$defs/date" },
+        "place": { "$ref": "#/$defs/place" },
+        "type": { "type": "string" },
+        "cause": { "type": "string" },
+        "occurred": { "type": "boolean" },
+        "husbandAge": { "type": "string", "description": "HUSB.AGE" },
+        "wifeAge": { "type": "string", "description": "WIFE.AGE" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "familyAttribute": {
+      "type": "object",
+      "required": ["tag"],
+      "additionalProperties": false,
+      "properties": {
+        "tag": { "enum": ["NCHI", "RESI", "FACT"] },
+        "value": { "type": "string" },
+        "date": { "$ref": "#/$defs/date" },
+        "place": { "$ref": "#/$defs/place" },
+        "type": { "type": "string" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "restriction": {
+      "type": "array",
+      "description": "The RESN payload, which the standard permits as a comma-separated list.",
+      "items": { "enum": ["CONFIDENTIAL", "LOCKED", "PRIVACY"] }
+    },
+    "familyLinkAsChild": {
+      "type": "object",
+      "required": ["xref"],
+      "additionalProperties": false,
+      "properties": {
+        "xref": { "$ref": "#/$defs/pointer" },
+        "pedigree": {
+          "description": "PEDI: how this person is linked to that family.",
+          "enum": ["ADOPTED", "BIRTH", "FOSTER", "SEALING", "OTHER"]
+        },
+        "pedigreePhrase": { "type": "string" },
+        "status": {
+          "description": "STAT: how well established the link is.",
+          "enum": ["CHALLENGED", "DISPROVEN", "PROVEN"]
+        },
+        "statusPhrase": { "type": "string" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "familyLinkAsSpouse": {
+      "type": "object",
+      "required": ["xref"],
+      "additionalProperties": false,
+      "properties": {
+        "xref": { "$ref": "#/$defs/pointer" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "individual": {
+      "type": "object",
+      "description": "An INDI record.",
+      "required": ["xref"],
+      "additionalProperties": false,
+      "properties": {
+        "xref": { "$ref": "#/$defs/xref" },
+        "restriction": { "$ref": "#/$defs/restriction" },
+        "names": { "type": "array", "items": { "$ref": "#/$defs/name" } },
+        "sex": {
+          "description": "The SEX enumeration: M male, F female, X neither, U undetermined.",
+          "enum": ["M", "F", "X", "U"]
+        },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/individualEvent" } },
+        "attributes": { "type": "array", "items": { "$ref": "#/$defs/individualAttribute" } },
+        "familiesAsChild": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/familyLinkAsChild" }
+        },
+        "familiesAsSpouse": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/familyLinkAsSpouse" }
+        },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "family": {
+      "type": "object",
+      "description": "A FAM record. The standard's partner tags are HUSB and WIFE; they are role names inherited from earlier versions and carry no requirement about the partners themselves.",
+      "required": ["xref"],
+      "additionalProperties": false,
+      "properties": {
+        "xref": { "$ref": "#/$defs/xref" },
+        "restriction": { "$ref": "#/$defs/restriction" },
+        "husband": { "$ref": "#/$defs/pointer" },
+        "wife": { "$ref": "#/$defs/pointer" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/pointer" } },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/familyEvent" } },
+        "attributes": { "type": "array", "items": { "$ref": "#/$defs/familyAttribute" } },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "header": {
+      "type": "object",
+      "description": "The HEAD record. The standard requires exactly one substructure of it: GEDC.VERS, which states the specification the dataset claims to follow.",
+      "required": ["gedcomVersion"],
+      "additionalProperties": false,
+      "properties": {
+        "gedcomVersion": { "type": "string", "description": "HEAD.GEDC.VERS" },
+        "sourceSystem": {
+          "type": "string",
+          "description": "HEAD.SOUR: the application that produced the file."
+        },
+        "sourceName": { "type": "string", "description": "HEAD.SOUR.NAME" },
+        "sourceVersion": { "type": "string", "description": "HEAD.SOUR.VERS" },
+        "destination": { "type": "string", "description": "HEAD.DEST" },
+        "date": { "$ref": "#/$defs/date" },
+        "submitter": { "$ref": "#/$defs/pointer" },
+        "copyright": { "type": "string" },
+        "language": { "type": "string" },
+        "placeForm": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "HEAD.PLAC.FORM"
+        },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "origin": {
+      "type": "object",
+      "description": "How this document was obtained. Not part of GEDCOM: it is what the editor needs in order to write the file back in the dialect and encoding it arrived in.",
+      "additionalProperties": false,
+      "properties": {
+        "dialect": {
+          "description": "The version the source file declared, or that was inferred when it declared none.",
+          "enum": ["7.0", "5.5.1"]
+        },
+        "dialectInferred": {
+          "type": "boolean",
+          "description": "True where the version was guessed rather than read from HEAD.GEDC.VERS. A guess is surfaced to the user rather than kept quiet."
+        },
+        "encoding": {
+          "type": "string",
+          "description": "The character encoding the file declared: UTF-8, ANSEL, ANSI, ASCII or UNICODE. Needed to write 5.5.1 back out as it came in."
+        },
+        "fileName": { "type": "string" }
+      }
+    }
+  }
+}

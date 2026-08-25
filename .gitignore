@@ -1,0 +1,142 @@
+# ---------------------------------------------------------------------------
+# Build output and tooling
+# ---------------------------------------------------------------------------
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.vite/
+.eslintcache
+.DS_Store
+Thumbs.db
+*.local
+.env
+.env.*
+
+# ---------------------------------------------------------------------------
+# Real genealogy data must not reach a public repository.
+#
+# Genealogy files describe living people. Public tests run on a wholly invented corpus in
+# tests/fixtures/; anything real stays local, ignored, under tests/private/. A fixture committed
+# once stays in git history even after it is deleted, so this is a gate, not a preference.
+# ---------------------------------------------------------------------------
+tests/private/
+*.private.ged
+*.private.json
+
+# ---------------------------------------------------------------------------
+# Local editor and assistant tooling state.
+#
+# These files are personal to whoever ran the tool, they churn constantly, and they routinely
+# contain absolute paths, file contents and pasted secrets. None of that belongs in a public
+# repository. Grouped by vendor so an entry can be un-ignored deliberately with a `!` negation
+# next to its group rather than deleting the whole block.
+# ---------------------------------------------------------------------------
+
+# Anthropic -- Claude Code, Claude Desktop
+.claude/
+.claude.json
+.claude.local.json
+CLAUDE.md
+CLAUDE.local.md
+.anthropic/
+
+# OpenAI -- Codex CLI, ChatGPT desktop
+.codex/
+.openai/
+codex.md
+.chatgpt/
+
+# Agent instruction files (shared convention across Codex, Amp, Jules and others)
+AGENTS.md
+AGENT.md
+
+# Google -- Gemini CLI, Jules
+.gemini/
+GEMINI.md
+.jules/
+
+# Cursor
+.cursor/
+.cursorrules
+.cursorignore
+.cursorindexingignore
+
+# GitHub Copilot
+.copilot/
+.github/copilot-instructions.md
+.github/instructions/
+.github/prompts/
+
+# Codeium / Windsurf
+.codeium/
+.windsurf/
+.windsurfrules
+
+# Cline / Roo Code / Kilo Code
+.cline/
+.clinerules
+.clinerules/
+.roo/
+.roomodes
+.kilocode/
+
+# Aider
+.aider*
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache.v*/
+
+# Continue
+.continue/
+
+# Sourcegraph Cody
+.cody/
+.sourcegraph/
+
+# Amazon Q / CodeWhisperer
+.amazonq/
+.aws/amazonq/
+
+# JetBrains AI Assistant / Junie
+.junie/
+
+# Sourcegraph Amp
+.amp/
+
+# Zed AI
+.zed/
+
+# Tabnine
+.tabnine/
+
+# Qodo (formerly Codium AI)
+.qodo/
+
+# Augment Code
+.augment/
+.augmentignore
+
+# Trae
+.trae/
+
+# OpenHands / Devin / Plandex / Goose / opencode
+.openhands/
+.devin/
+.plandex/
+.goose/
+.opencode/
+opencode.json
+
+# SpecStory and similar session recorders
+.specstory/
+.history/
+
+# Model Context Protocol server configs (often carry tokens)
+.mcp.json
+mcp.json
+
+# Generic agent scratch space
+.ai/
+.agent/
+.llm/
