@@ -182,6 +182,10 @@
             "EVEN"
           ]
         },
+        "value": {
+          "type": "string",
+          "description": "The payload, where it was something other than 'Y'. Most event tags take Y or nothing and 'occurred' carries that; EVEN takes text, and a writer may put text on any of them."
+        },
         "date": { "$ref": "#/$defs/date" },
         "place": { "$ref": "#/$defs/place" },
         "age": {
@@ -267,6 +271,10 @@
             "MARS",
             "EVEN"
           ]
+        },
+        "value": {
+          "type": "string",
+          "description": "The payload, where it was something other than 'Y'. See individualEvent.value."
         },
         "date": { "$ref": "#/$defs/date" },
         "place": { "$ref": "#/$defs/place" },

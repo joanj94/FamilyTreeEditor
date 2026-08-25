@@ -243,6 +243,20 @@ function mapName(node: Structure, report: (issue: ImportIssue) => void): GenName
   );
 }
 
+/**
+ * A `DATE` line and its `PHRASE`.
+ *
+ * The payload is authoritative and `parseDateValue` reads it. `PHRASE` is separate: GEDCOM 7 made
+ * it a substructure, where 5.5.1 folded the same idea into the payload as `INT <date> (<phrase>)`.
+ * Both end up in `GenDate.phrase`, and an explicit `PHRASE` wins over one inferred from an `INT`
+ * payload, because it is the writer saying so rather than this parser deducing it.
+ */
+function mapDate(node: Structure): GenDate {
+  const parsed = parseDateValue(payloadOf(node) ?? '');
+  const phrase = payloadOf(find(node, 'PHRASE'));
+  return phrase === undefined ? parsed : { ...parsed, phrase };
+}
+
 /** The substructures every event and attribute shares. */
 interface EventDetail {
   date?: GenDate;
@@ -264,7 +278,7 @@ interface EventDetail {
 function eventDetailFrom(child: Structure): EventDetail | undefined {
   switch (child.tag) {
     case 'DATE':
-      return { date: parseDateValue(payloadOf(child) ?? '') };
+      return { date: mapDate(child) };
     case 'PLAC':
       return { place: mapPlace(child) };
     case 'AGE': {
@@ -294,9 +308,19 @@ const detailFields = (detail: EventDetail): Record<string, unknown> => ({
   ...(detail.cause === undefined ? {} : { cause: detail.cause }),
 });
 
-/** A payload of `Y` asserts the event happened, with no further detail. */
-const occurredFlag = (node: Structure): boolean =>
-  (payloadOf(node) ?? '').toUpperCase() === 'Y';
+/**
+ * Read an event's own payload.
+ *
+ * `Y` asserts that the event happened with no further detail, and is the only payload most event
+ * tags take. `EVEN` takes text, and writers put text on the others too -- so anything that is not
+ * `Y` is kept as a value rather than being read as an assertion or, worse, dropped.
+ */
+function eventPayload(node: Structure): { occurred?: true; value?: string } {
+  const payload = payloadOf(node);
+  if (payload === undefined) return {};
+  if (payload.toUpperCase() === 'Y') return { occurred: true };
+  return { value: payload };
+}
 
 function mapIndividualEvent(node: Structure): IndividualEvent {
   let detail: EventDetail = {};
@@ -321,8 +345,8 @@ function mapIndividualEvent(node: Structure): IndividualEvent {
   return withExtensions(
     {
       tag: node.tag as IndividualEventTag,
+      ...eventPayload(node),
       ...detailFields(detail),
-      ...(occurredFlag(node) ? { occurred: true } : {}),
       ...(familyAsChild === undefined ? {} : { familyAsChild }),
       ...(adoptedBy === undefined ? {} : { adoptedBy }),
     },
@@ -374,8 +398,8 @@ function mapFamilyEvent(node: Structure): FamilyEvent {
   return withExtensions(
     {
       tag: node.tag as FamilyEventTag,
+      ...eventPayload(node),
       ...detailFields(detail),
-      ...(occurredFlag(node) ? { occurred: true } : {}),
       ...(husbandAge === undefined ? {} : { husbandAge }),
       ...(wifeAge === undefined ? {} : { wifeAge }),
     },
@@ -585,7 +609,7 @@ function mapHeader(record: ParsedRecord | undefined): Header {
       ...(sourceName === undefined ? {} : { sourceName }),
       ...(sourceVersion === undefined ? {} : { sourceVersion }),
       ...(destination === undefined ? {} : { destination }),
-      ...(dateNode === undefined ? {} : { date: parseDateValue(payloadOf(dateNode) ?? '') }),
+      ...(dateNode === undefined ? {} : { date: mapDate(dateNode) }),
       ...(submitter === undefined ? {} : { submitter }),
       ...(copyright === undefined ? {} : { copyright }),
       ...(language === undefined ? {} : { language }),

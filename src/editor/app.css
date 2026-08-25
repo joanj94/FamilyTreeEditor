@@ -171,6 +171,7 @@ body {
 
 .actions button,
 .steps button,
+.saves button,
 .close {
   padding: 0.3rem 0.7rem;
   border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
@@ -183,7 +184,8 @@ body {
 }
 
 .actions button:disabled,
-.steps button:disabled {
+.steps button:disabled,
+.saves button:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -193,9 +195,35 @@ body {
   color: crimson;
 }
 
-.steps {
+.steps,
+.saves {
   display: flex;
   gap: 0.35rem;
+}
+
+/* A save is the moment the user's own file is replaced, so what the format could not carry is
+   stated here rather than left in a console. It reads as information, not as a failure: choosing
+   5.5.1 is a legitimate choice, and this is what it cost. */
+.saved {
+  margin: 0;
+  padding: 0.6rem 1.25rem;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  font-size: 0.9rem;
+}
+
+.saved p {
+  margin: 0;
+}
+
+.saved ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+}
+
+.saved em {
+  font-style: normal;
+  opacity: 0.8;
 }
 
 /* A refused edit is not an error in the file; it is the tool declining to break the tree. It

@@ -1,0 +1,35 @@
+0 HEAD
+1 SOUR GDS
+2 VERS 9.0.28
+2 NAME Placeholder Genealogy
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 SUBM @U1@
+1 DATE 4 APR 1998
+0 @I1@ INDI
+1 NAME Dolors /Quarta/
+2 TYPE nom de plume
+2 GIVN Dolors
+2 SURN Quarta
+1 SEX F
+1 BIRT
+2 DATE INT 1830 (recorded only as before the fire)
+1 DEAT
+2 DATE BET 1890 AND 1895
+1 NOTE A note long enough to need continuation on export, A note long enough to need continuation on export, A note long enough to need continuation on export, A note long enough to need continuation on export, A note long enough to need continuation on export, A note long enough to need continuation on export, A note long enough to need continuation on export, A note long enough to need continuation on export,
+2 CONT and a second paragraph, equally long, so CONT and CONC compose. and a second paragraph, equally long, so CONT and CONC compose. and a second paragraph, equally long, so CONT and CONC compose. and a second paragraph, equally long, so CONT and CONC compose. and a second paragraph, equally long, so CONT and CONC compose.
+1 FAMS @F1@
+0 @I2@ INDI
+1 NAME Eloi /Cinque/
+1 SEX U
+1 FAMS @F1@
+0 @F1@ FAM
+1 HUSB @I2@
+1 WIFE @I1@
+1 MARR
+2 DATE ABT 1855
+0 @U1@ SUBM
+1 NAME An invented submitter
+0 TRLR

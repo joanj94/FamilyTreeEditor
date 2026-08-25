@@ -206,6 +206,15 @@ export type FamilyAttributeTag = 'NCHI' | 'RESI' | 'FACT';
 
 export interface IndividualEvent {
   readonly tag: IndividualEventTag;
+  /**
+   * The payload, where it was something other than `Y`.
+   *
+   * Most event tags take `Y` or nothing, and `occurred` carries that. `EVEN` takes text, and a
+   * writer may put text on any of them -- so the payload needs somewhere to live that is not the
+   * `occurred` flag, or `1 EVEN Won a prize` arrives as an anonymous assertion that something
+   * happened.
+   */
+  readonly value?: string;
   readonly date?: GenDate;
   readonly place?: Place;
   /** The `AGE` payload, in the standard's age grammar. */
@@ -249,6 +258,8 @@ export interface IndividualAttribute {
 
 export interface FamilyEvent {
   readonly tag: FamilyEventTag;
+  /** The payload, where it was something other than `Y`. See `IndividualEvent.value`. */
+  readonly value?: string;
   readonly date?: GenDate;
   readonly place?: Place;
   readonly type?: string;

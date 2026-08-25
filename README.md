@@ -28,7 +28,12 @@ Free, open source, and entirely client-side.
   new document rather than mutating the old one, and the result stays schema-valid and audit-clean
   or the command does not apply.
 - **Writes GEDCOM 7 by default and 5.5.1 on request**, alongside the JSON form of the document.
-  `import(export(x))` equals `import(x)`: a round trip is not allowed to lose anything.
+  `import(export(import(f)))` equals `import(f)` for every fixture, for an edited document, and for
+  a few hundred generated ones: a round trip is not allowed to lose anything anyone said about the
+  family. Two things are the writer's own and not copied from the document — the version the file
+  declares, and the encoding it declares, which is always the encoding actually written. Going back
+  to 5.5.1 is a downgrade, and each thing the older version cannot say is reported rather than
+  quietly dropped.
 
 Media, sources, notes, places and merge tooling are deliberately outside the scope.
 
