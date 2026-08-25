@@ -1,0 +1,110 @@
+/*
+ * The chart's own styles.
+ *
+ * Stroke widths are in layout units and scale with the chart, which is what makes a zoomed-out
+ * chart read as a smaller drawing rather than as the same drawing with fatter lines.
+ *
+ * `pointer-events` is doing real work here: every clickable thing carries an invisible `.hit`
+ * shape larger than what is drawn, because a 5px dot and a 2px line cannot be hit by a human with
+ * a mouse, let alone with a finger.
+ */
+
+.chart-stage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--chart-bg, #fbfaf7);
+  touch-action: none; /* the wheel and drag handlers own the gesture */
+  cursor: grab;
+  user-select: none;
+}
+
+.chart-stage.dragging {
+  cursor: grabbing;
+}
+
+.link {
+  fill: none;
+  stroke: var(--chart-line, #8c8378);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.link.spouse {
+  stroke: var(--chart-line-spouse, #a89c8c);
+}
+
+.person .box {
+  fill: var(--chart-box, #fff);
+  stroke: var(--chart-box-line, #6f665c);
+  stroke-width: 1.4;
+}
+
+.person.sex-M .box {
+  fill: var(--chart-box-m, #f2f6fb);
+}
+
+.person.sex-F .box {
+  fill: var(--chart-box-f, #fbf3f4);
+}
+
+.person .name,
+.person .years,
+.ordinal,
+.toggle .hiding {
+  font-family: inherit;
+  fill: var(--chart-text, #2c2822);
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.person .name {
+  font-size: 15px;
+}
+
+.person .years {
+  font-size: 12px;
+  fill: var(--chart-text-dim, #6f665c);
+}
+
+.ordinal {
+  font-size: 12px;
+  text-anchor: end;
+  fill: var(--chart-text-dim, #6f665c);
+}
+
+.person,
+.union-node,
+.toggle {
+  cursor: pointer;
+}
+
+/* Invisible, and larger than what is drawn: a 5px dot is not a target. */
+.hit {
+  fill: transparent;
+  stroke: none;
+}
+
+.union {
+  fill: var(--chart-union, #6f665c);
+  stroke: none;
+}
+
+.toggle .box {
+  fill: var(--chart-box, #fff);
+  stroke: var(--chart-box-line, #6f665c);
+  stroke-width: 1.4;
+}
+
+.toggle .sign {
+  fill: none;
+  stroke: var(--chart-box-line, #6f665c);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.toggle .hiding {
+  font-size: 12px;
+  fill: var(--chart-text-dim, #6f665c);
+}

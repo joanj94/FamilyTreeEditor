@@ -188,8 +188,8 @@ describe('records as a whole', () => {
   });
 
   it('produces a document that satisfies the schema', () => {
-    // The mapper's output is the contract's input. If these two ever disagree, every later phase
-    // inherits the disagreement.
+    // The mapper's output is the contract's input. If these two ever disagree, everything
+    // downstream inherits the disagreement.
     const { doc } = map(
       `${HEAD7}0 @I1@ INDI\n1 NAME GivenA /SurnameA/\n2 SURN SurnameA\n2 SURN SurnameB\n1 SEX M\n1 BIRT\n2 DATE ABT 1901\n1 FAMS @F1@\n1 _UID X\n` +
         `0 @I2@ INDI\n1 SEX F\n1 FAMS @F1@\n` +

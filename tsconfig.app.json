@@ -5,7 +5,10 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "types": ["vitest/globals"],
+    /* `node` is here for the test suites that read a fixture off disk, not for the app: the
+       bundle is browser-only, and a Node API reaching it would fail the build long before it
+       failed a user. */
+    "types": ["vitest/globals", "node"],
 
     "resolveJsonModule": true,
     "allowImportingTsExtensions": false,

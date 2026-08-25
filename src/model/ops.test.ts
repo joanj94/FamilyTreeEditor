@@ -346,8 +346,8 @@ describe('updateFamily', () => {
 
 describe('the invariant every operation holds', () => {
   it('leaves the document schema-valid and free of audit errors, whatever the sequence', () => {
-    // The gate for this phase, stated as a property rather than as a list of cases. A refusal is
-    // a legitimate outcome -- the point is that the document is never left broken either way.
+    // The whole contract, stated as a property rather than as a list of cases. A refusal is a
+    // legitimate outcome -- the point is that the document is never left broken either way.
     const step = fc.constantFrom(
       'addIndividual',
       'createUnion',
