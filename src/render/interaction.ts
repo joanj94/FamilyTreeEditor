@@ -108,9 +108,30 @@ export function dragTo(gesture: Gesture, clientX: number, clientY: number): Drag
   };
 }
 
-/** Whether the click that follows this gesture should be swallowed. */
+/** Whether this gesture ended as a drag, and so held a pointer capture to release. */
 export function endedInDrag(gesture: Gesture | null): boolean {
   return gesture !== null && gesture.moved;
+}
+
+/**
+ * Whether a click is the tail of a drag rather than a choice.
+ *
+ * Judged against the click's *own* `pointerdown`, not against a flag left over from the last
+ * gesture. A flag is the obvious implementation and it is wrong: it can only be cleared by a click
+ * that reaches something willing to clear it, so a drag released over empty background leaves it
+ * armed and the next real click -- a click the user meant -- is swallowed instead. That failure is
+ * invisible in the code and maddening in the hand, since every other click works.
+ *
+ * Comparing coordinates has no such state. Every click is preceded by its own `pointerdown`, so
+ * each one is judged on its own travel and nothing carries over.
+ */
+export function isDragClick(
+  gesture: Gesture | null,
+  clientX: number,
+  clientY: number,
+): boolean {
+  if (gesture === null) return false;
+  return Math.abs(clientX - gesture.fromX) + Math.abs(clientY - gesture.fromY) >= DRAG_SLOP;
 }
 
 /** The zoom limits. Beyond them the chart is either a smear or a single box. */

@@ -1,39 +1,55 @@
 /**
- * The shell: open a file, draw it.
+ * The shell: open a file, draw it, edit it.
  *
- * Deliberately thin. Editing, undo/redo and the record panels are still to come, and the seam they
- * will attach to is already here -- the chart raises what was chosen and decides nothing about it.
+ * The document lives in a history rather than in a `useState`, because every edit has to be
+ * undoable and undo has to restore the state exactly. `apply` is the only way in: it runs a
+ * command, checks the result against the schema and against `audit()`, and records it only if both
+ * pass. A refused edit changes nothing and says why, in the bar, in words a genealogist can act on.
  *
  * The file is read with `File.arrayBuffer()` and parsed in this tab. There is no upload, no fetch,
  * and nowhere for one to be added by accident: `gedcom/` and `model/` cannot import anything from
  * the UI, and nothing in this project talks to a network at all.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { importGedcom, type ImportIssue } from '../gedcom/mapper.js';
 import { audit, type AuditFinding } from '../model/audit.js';
 import { Chart } from '../render/Chart.js';
-import type { GedcomDoc, Xref } from '../model/types.js';
+import { PersonPanel } from './PersonPanel.js';
+import { UnionPanel } from './UnionPanel.js';
+import { apply, type Command } from './commands.js';
+import {
+  begin,
+  canRedo,
+  canUndo,
+  redo,
+  redoLabel,
+  undo,
+  undoLabel,
+  type History,
+} from './history.js';
+import type { Xref } from '../model/types.js';
 
 interface Opened {
   readonly name: string;
-  readonly doc: GedcomDoc;
+  readonly history: History;
   readonly issues: readonly ImportIssue[];
-  readonly findings: readonly AuditFinding[];
 }
 
 export function App() {
   const [opened, setOpened] = useState<Opened | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
   const [chosen, setChosen] = useState<Xref | null>(null);
 
   const open = useCallback((file: File) => {
     setFailed(null);
+    setRefused(null);
     file
       .arrayBuffer()
       .then((buffer) => {
         const { doc, issues } = importGedcom(new Uint8Array(buffer), file.name);
-        setOpened({ name: file.name, doc, issues, findings: audit(doc) });
+        setOpened({ name: file.name, history: begin(doc, `Opened ${file.name}`), issues });
         setChosen(null);
       })
       .catch((error: unknown) => {
@@ -42,8 +58,54 @@ export function App() {
       });
   }, []);
 
-  const errors = opened?.findings.filter((finding) => finding.severity === 'error') ?? [];
-  const warnings = opened?.findings.filter((finding) => finding.severity === 'warning') ?? [];
+  const run = useCallback((command: Command) => {
+    setOpened((current) => {
+      if (current === null) return current;
+      const outcome = apply(current.history, command);
+      if (!outcome.ok) {
+        setRefused(outcome.problem);
+        return current;
+      }
+      setRefused(null);
+      if (outcome.created !== undefined) setChosen(outcome.created);
+      return { ...current, history: outcome.history };
+    });
+  }, []);
+
+  const step = useCallback((direction: 'undo' | 'redo') => {
+    setRefused(null);
+    setOpened((current) =>
+      current === null
+        ? current
+        : {
+            ...current,
+            history: direction === 'undo' ? undo(current.history) : redo(current.history),
+          },
+    );
+  }, []);
+
+  /* Ctrl+Z and Ctrl+Shift+Z, because an editor without them is not an editor. Bound on the window
+     so they work wherever the focus is, except inside a field, where the browser's own undo is
+     what the user means. */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      if (event.key.toLowerCase() !== 'z') return;
+      const inField =
+        event.target instanceof HTMLElement && event.target.closest('input, select');
+      if (inField !== null) return;
+      event.preventDefault();
+      step(event.shiftKey ? 'redo' : 'undo');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [step]);
+
+  const doc = opened?.history.present.doc;
+  const findings: readonly AuditFinding[] = doc === undefined ? [] : audit(doc);
+  const warnings = findings.filter((finding) => finding.severity === 'warning');
 
   return (
     <main className="shell">
@@ -60,20 +122,45 @@ export function App() {
           />
           <span>Open a .ged file</span>
         </label>
+
         {opened === null ? null : (
-          <p className="loaded">
-            {opened.name} — {opened.doc.individuals.length} people, {opened.doc.families.length}{' '}
-            families
-            {opened.issues.length > 0 ? `, ${String(opened.issues.length)} import notes` : ''}
-            {errors.length > 0 ? `, ${String(errors.length)} errors` : ''}
-            {warnings.length > 0 ? `, ${String(warnings.length)} warnings` : ''}
-          </p>
+          <>
+            <span className="steps">
+              <button
+                type="button"
+                disabled={!canUndo(opened.history)}
+                title={undoLabel(opened.history)}
+                onClick={() => {
+                  step('undo');
+                }}
+              >
+                Undo
+              </button>
+              <button
+                type="button"
+                disabled={!canRedo(opened.history)}
+                title={redoLabel(opened.history)}
+                onClick={() => {
+                  step('redo');
+                }}
+              >
+                Redo
+              </button>
+            </span>
+            <p className="loaded">
+              {opened.name} — {doc?.individuals.length ?? 0} people, {doc?.families.length ?? 0}{' '}
+              families
+              {opened.issues.length > 0 ? `, ${String(opened.issues.length)} import notes` : ''}
+              {warnings.length > 0 ? `, ${String(warnings.length)} warnings` : ''}
+            </p>
+          </>
         )}
       </header>
 
       {failed === null ? null : <p className="failed">That file could not be read: {failed}</p>}
+      {refused === null ? null : <p className="refused">{refused}</p>}
 
-      {opened === null ? (
+      {opened === null || doc === undefined ? (
         <section className="empty">
           <p className="tagline">
             Open a GEDCOM file to see the family drawn. 5.5.1 and 7 are both read, in the
@@ -82,16 +169,29 @@ export function App() {
           <p className="privacy">Your file is parsed in this browser and never uploaded.</p>
         </section>
       ) : (
-        <section className="stage">
-          <Chart doc={opened.doc} onSelectPerson={setChosen} onSelectUnion={setChosen} />
+        <section className="work">
+          <div className="stage">
+            <Chart doc={doc} onSelectPerson={setChosen} onSelectUnion={setChosen} />
+          </div>
+          {chosen === null ? null : (
+            <aside className="record">
+              {doc.families.some((family) => family.xref === chosen) ? (
+                <UnionPanel doc={doc} xref={chosen} run={run} onSelect={setChosen} />
+              ) : (
+                <PersonPanel doc={doc} xref={chosen} run={run} onSelect={setChosen} />
+              )}
+              <button
+                type="button"
+                className="close"
+                onClick={() => {
+                  setChosen(null);
+                }}
+              >
+                Close
+              </button>
+            </aside>
+          )}
         </section>
-      )}
-
-      {chosen === null ? null : (
-        <aside className="chosen">
-          {/* The record panel and the edit forms take this place. */}
-          <p>{chosen}</p>
-        </aside>
       )}
     </main>
   );

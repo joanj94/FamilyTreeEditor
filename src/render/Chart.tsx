@@ -26,6 +26,7 @@ import {
   controlScale,
   dragTo,
   endedInDrag,
+  isDragClick,
   pinTo,
   toScreen,
   zoomAbout,
@@ -63,7 +64,8 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
   const sceneRef = useRef<SVGGElement | null>(null);
   const view = useRef<Viewport>(OPENS_AT);
   const gesture = useRef<Gesture | null>(null);
-  const swallowClick = useRef(false);
+  /* Kept past the end of the gesture, because the click that follows is judged against it. */
+  const lastDown = useRef<Gesture | null>(null);
   const pinned = useRef<{ family: Xref; sx: number; sy: number } | null>(null);
 
   /** Write the viewport onto the scene, and re-size the controls that fight the zoom. */
@@ -96,7 +98,9 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
     if (stage === null) return;
 
     const onPointerDown = (event: PointerEvent): void => {
-      gesture.current = beginDrag(event.pointerId, event.clientX, event.clientY, view.current);
+      const started = beginDrag(event.pointerId, event.clientX, event.clientY, view.current);
+      gesture.current = started;
+      lastDown.current = started;
     };
 
     const onPointerMove = (event: PointerEvent): void => {
@@ -117,8 +121,7 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
     const onPointerUp = (): void => {
       const current = gesture.current;
       if (current !== null && endedInDrag(current)) {
-        // The click that ends a pan is not a choice about what is under the cursor.
-        swallowClick.current = true;
+        lastDown.current = current;
         if (stage.hasPointerCapture(current.pointerId)) {
           stage.releasePointerCapture(current.pointerId);
         }
@@ -165,14 +168,18 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
     apply();
   }, [layout, apply]);
 
-  const chose = (): boolean => {
-    if (!swallowClick.current) return true;
-    swallowClick.current = false;
-    return false;
-  };
+  /**
+   * Whether a click is a choice or the tail of a pan.
+   *
+   * Judged against the click's own `pointerdown`. Releasing the mouse after panning should not
+   * select whatever ended up under it -- and, just as importantly, the click *after* that should
+   * work normally, which is what a leftover flag gets wrong.
+   */
+  const chose = (event: { clientX: number; clientY: number }): boolean =>
+    !isDragClick(lastDown.current, event.clientX, event.clientY);
 
-  const toggleFold = (family: Xref): void => {
-    if (!chose()) return;
+  const toggleFold = (family: Xref, event: { clientX: number; clientY: number }): void => {
+    if (!chose(event)) return;
     const before = layout.unions.get(family);
     if (before !== undefined) {
       pinned.current = { family, ...toScreen(view.current, before) };
@@ -204,8 +211,8 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
               key={person.id}
               className={`person${person.sex === undefined ? '' : ` sex-${person.sex}`}`}
               data-id={person.id}
-              onClick={() => {
-                if (chose()) onSelectPerson?.(person.id);
+              onClick={(event) => {
+                if (chose(event)) onSelectPerson?.(person.id);
               }}
             >
               {/* On the group, not on the text: the whole box is what a reader points at, and a
@@ -235,8 +242,8 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
               <g
                 className="union-node"
                 data-id={union.id}
-                onClick={() => {
-                  if (chose()) onSelectUnion?.(union.id);
+                onClick={(event) => {
+                  if (chose(event)) onSelectUnion?.(union.id);
                 }}
               >
                 <circle className="hit" cx={union.x} cy={union.y} r={11} />
@@ -250,8 +257,8 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
                   data-fam={union.id}
                   data-cx={union.x}
                   data-cy={union.y}
-                  onClick={() => {
-                    toggleFold(union.id);
+                  onClick={(event) => {
+                    toggleFold(union.id, event);
                   }}
                 >
                   <rect

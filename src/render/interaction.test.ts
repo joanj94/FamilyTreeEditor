@@ -16,6 +16,7 @@ import {
   controlScale,
   dragTo,
   endedInDrag,
+  isDragClick,
   pinTo,
   toScreen,
   zoomAbout,
@@ -51,12 +52,42 @@ describe('the drag slop', () => {
     expect(moved.pan).toEqual({ tx: 75, ty: 90 });
   });
 
-  it('marks a finished drag so the click that ends it can be swallowed', () => {
-    // Releasing the mouse after panning should not also select whatever ended up under it.
+  it('marks a finished drag, which is what releases the capture', () => {
     const gesture = beginDrag(1, 0, 0, view);
     expect(endedInDrag(gesture)).toBe(false);
     expect(endedInDrag(dragTo(gesture, 20, 0).gesture)).toBe(true);
     expect(endedInDrag(null)).toBe(false);
+  });
+});
+
+describe('telling a click from the tail of a drag', () => {
+  it('ignores the click that ends a pan', () => {
+    // Releasing the mouse after panning should not also select whatever ended up under it.
+    const panned = dragTo(beginDrag(1, 100, 100, view), 300, 100).gesture;
+    expect(isDragClick(panned, 300, 100)).toBe(true);
+  });
+
+  it('lets a plain click through', () => {
+    const still = beginDrag(1, 100, 100, view);
+    expect(isDragClick(still, 101, 100)).toBe(false);
+  });
+
+  it('lets the click after a drag through', () => {
+    // The regression this exists for. A flag set at the end of a drag can only be cleared by a
+    // click that reaches something willing to clear it -- so a drag released over empty
+    // background left it armed, and the *next* click, one the user meant, was swallowed. Found by
+    // driving the real page: pan, then click a person, and nothing happened.
+    const panned = dragTo(beginDrag(1, 100, 100, view), 300, 100).gesture;
+    expect(isDragClick(panned, 300, 100)).toBe(true);
+
+    // The next gesture is its own pointerdown, and is judged on its own travel.
+    const fresh = beginDrag(2, 500, 400, view);
+    expect(isDragClick(fresh, 500, 400)).toBe(false);
+  });
+
+  it('treats a click with no gesture behind it as a choice', () => {
+    // A click from the keyboard, or one whose pointerdown landed outside the stage.
+    expect(isDragClick(null, 10, 10)).toBe(false);
   });
 });
 
