@@ -339,26 +339,34 @@ export function placeUnions(
     const lanes = new Map<Xref, number>();
     for (const union of ordered) {
       let lane = laneEnd.findIndex((end) => end < union.from - GEOMETRY.laneSlop);
+      /* A union that overlaps every lane in use opens another. It used to be pushed into the
+         last one instead, once a fixed count was reached -- and a person married five times put
+         two of their unions on one height, which draws as a single unbroken stroke joining four
+         people who were in two separate couples. That is the exact fault the lanes exist to
+         prevent, so the count is no longer what is capped. */
       if (lane === -1) {
-        if (laneEnd.length < GEOMETRY.lanes) {
-          laneEnd.push(0);
-          lane = laneEnd.length - 1;
-        } else {
-          lane = GEOMETRY.lanes - 1;
-        }
+        laneEnd.push(0);
+        lane = laneEnd.length - 1;
       }
       laneEnd[lane] = union.to;
       lanes.set(union.family, lane);
     }
     const top = row * GEOMETRY.rowH + GEOMETRY.nodeH + GEOMETRY.unionDrop;
     const deepest = Math.max(0, ...lanes.values());
+    /* What is capped instead is how far the stack may reach: `GEOMETRY.lanes` is a vertical
+       envelope, not a count, and the sibling bar below the dots has to stay clear of the
+       children's boxes. A row within it -- which is nearly all of them -- keeps the ported
+       spacing to the pixel; a row past it squeezes into it, since runs at distinct heights read
+       as separate unions however close they are, and runs at one height never do. */
+    const envelope = (GEOMETRY.lanes - 1) * GEOMETRY.laneH;
+    const laneH = deepest === 0 ? GEOMETRY.laneH : Math.min(GEOMETRY.laneH, envelope / deepest);
     /* One height for every dot on the row. A row using one lane -- which is nearly all of them --
        is unchanged by this. */
-    const y = top + deepest * GEOMETRY.laneH;
+    const y = top + deepest * laneH;
 
     for (const union of ordered) {
       const lane = lanes.get(union.family) ?? 0;
-      const runY = top + lane * GEOMETRY.laneH;
+      const runY = top + lane * laneH;
       const kids = collapsed.has(union.family) ? [] : childrenOf(relations, union.family);
       const drawn = kids.filter((child) => centre.has(child));
 

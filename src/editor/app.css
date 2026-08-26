@@ -138,6 +138,26 @@ body {
   font-size: 0.8rem;
 }
 
+/* The sex sign and the dagger beside a heading. Dimmer than the name, because they qualify it
+   rather than being part of it. */
+.record h2 .sign {
+  color: var(--muted);
+  font-weight: normal;
+}
+
+/* Which of a partner's marriages this union is -- the same `(n)` the chart draws at the dot.
+   It belongs with the identifier above it, so the gap the identifier leaves is closed rather
+   than pulled back with a negative margin. */
+.xref:has(+ .marriage-number) {
+  margin-bottom: 0.2rem;
+}
+
+.marriage-number {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .field {
   display: flex;
   flex-direction: column;

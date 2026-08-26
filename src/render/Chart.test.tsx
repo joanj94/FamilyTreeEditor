@@ -170,6 +170,105 @@ describe('mounting', () => {
   });
 });
 
+describe('the marks a box carries', () => {
+  it('draws the sex as a sign, so a box says it at a glance', () => {
+    mount(<Chart doc={doc} />);
+    const marks = [...container.querySelectorAll('.person .marks')].map(
+      (node) => node.textContent,
+    );
+    expect(marks).toContain('♂');
+    expect(marks).toContain('♀');
+  });
+
+  it('daggers a death after the years as soon as the record carries a date for it', () => {
+    // The complaint this answers: a year alone says when something happened, not what.
+    const dead = {
+      ...doc,
+      individuals: doc.individuals.map((individual) =>
+        individual.xref === '@I1@'
+          ? {
+              ...individual,
+              events: [
+                { tag: 'BIRT' as const, date: { value: '1900', start: { year: 1900 } } },
+                { tag: 'DEAT' as const, date: { value: '1970', start: { year: 1970 } } },
+              ],
+            }
+          : individual,
+      ),
+    };
+    mount(<Chart doc={dead} />);
+    const marks = [...container.querySelectorAll('.person .marks')].map(
+      (node) => node.textContent,
+    );
+    expect(marks).toContain('♂ 1900–1970 †');
+    expect(marks.filter((mark) => mark?.includes('†'))).toHaveLength(1);
+  });
+
+  it('speaks the marks as words, since a screen reader reads a glyph as its typography', () => {
+    mount(<Chart doc={doc} />);
+    const spoken = boxes().map((box) => box.getAttribute('aria-label'));
+    expect(spoken).toContain('GivenA SurnameB, male');
+    /* Not the glyphs: "female sign" and "dagger" describe the drawing, not the person. */
+    for (const label of spoken) expect(label).not.toContain('♀');
+  });
+});
+
+describe('which marriage a union is', () => {
+  /** One person, married twice: the second union has no children of its own. */
+  const remarried: GedcomDoc = {
+    header: { gedcomVersion: '7.0' },
+    individuals: [
+      {
+        xref: '@I1@',
+        names: [{ value: 'GivenA /SurnameB/' }],
+        familiesAsSpouse: [{ xref: '@F1@' }, { xref: '@F2@' }],
+      },
+      { xref: '@I2@', names: [{ value: 'A /B/' }], familiesAsSpouse: [{ xref: '@F1@' }] },
+      { xref: '@I3@', names: [{ value: 'C /D/' }], familiesAsSpouse: [{ xref: '@F2@' }] },
+      { xref: '@I4@', names: [{ value: 'E /B/' }], familiesAsChild: [{ xref: '@F1@' }] },
+    ],
+    families: [
+      { xref: '@F1@', husband: '@I1@', wife: '@I2@', children: ['@I4@'] },
+      { xref: '@F2@', husband: '@I1@', wife: '@I3@' },
+    ],
+  };
+
+  it('writes the number at the dot as well as beside the descent', () => {
+    mount(<Chart doc={remarried} />);
+    const atDots = [...container.querySelectorAll('.union-ordinal')].map(
+      (node) => node.textContent,
+    );
+    // The childless second marriage has no descent to carry its number, so the dot is the only
+    // place it can be said.
+    expect(atDots.sort()).toEqual(['(1)', '(2)']);
+  });
+
+  it('stands the number over its own dot, so it names something', () => {
+    // Set off to one side it floated diagonally away from the union and read as a mark on
+    // nothing. The drop from the run is what leads the eye from the number down to the dot.
+    mount(<Chart doc={remarried} />);
+    const dots = [...container.querySelectorAll('.union')].map((node) =>
+      Number(node.getAttribute('cx')),
+    );
+    const marks = [...container.querySelectorAll('.union-ordinal')].map((node) =>
+      Number(node.getAttribute('x')),
+    );
+    expect(marks).toHaveLength(2);
+    expect([...marks].sort((a, b) => a - b)).toEqual([...dots].sort((a, b) => a - b));
+  });
+
+  it('says nothing where neither partner married more than once', () => {
+    mount(<Chart doc={doc} />);
+    expect(container.querySelectorAll('.union-ordinal')).toHaveLength(0);
+  });
+
+  it('names an identifier the way the record is named, without the file delimiters', () => {
+    mount(<Chart doc={doc} />);
+    expect(container.querySelector('.union-node')?.getAttribute('aria-label')).toBe('Union F1');
+    expect(fold('@F1@')?.getAttribute('aria-label')).toBe('Collapse the branch below F1');
+  });
+});
+
 describe('folding', () => {
   it('hides the branch and puts it back', () => {
     mount(<Chart doc={doc} />);

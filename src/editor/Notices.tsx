@@ -10,6 +10,7 @@
  * written or a tree that could not be stored interrupts what the user was doing. `status` for the rest, which are the results of what
  * they just asked for and can wait for a pause in speech.
  */
+import { displayXref } from '../model/labels.js';
 import type { ExportNote } from '../gedcom/serialize.js';
 
 export interface Saved {
@@ -61,7 +62,7 @@ export function Notices({ failed, storeFailure, saveFailure, refused, saved }: N
               {saved.notes.map((note) => (
                 <li key={`${note.xref ?? ''}${note.message}${note.observed}`}>
                   {note.message} <em>{note.observed}</em>
-                  {note.xref === undefined ? '' : ` (${note.xref})`}
+                  {note.xref === undefined ? '' : ` (${displayXref(note.xref)})`}
                 </li>
               ))}
             </ul>

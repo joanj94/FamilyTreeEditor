@@ -50,7 +50,7 @@
 }
 
 .person .name,
-.person .years,
+.person .marks,
 .ordinal,
 .toggle .hiding {
   font-family: inherit;
@@ -65,8 +65,9 @@
   font-size: 15px;
 }
 
-.person .years {
-  /* `GEOMETRY.yearsSize`, for the same reason. */
+/* The line under the name: the sex sign, then the years with a dagger on a death. */
+.person .marks {
+  /* `GEOMETRY.yearsSize`, for the same reason -- the whole line is measured at this size. */
   font-size: 12px;
   fill: var(--chart-text-dim, #6f665c);
 }
@@ -75,6 +76,21 @@
   font-size: 12px;
   text-anchor: end;
   fill: var(--chart-text-dim, #6f665c);
+}
+
+/* The marriage number at the dot. Centred on the dot, not set off beside it: this one names a
+   junction rather than a single line, and offset it read as a mark on nothing.
+
+   Stronger than the one beside a descent, and knocked out of whatever it stands over. The halo is
+   insurance rather than routine -- `ordinalY` puts the number above every sideways run on its row
+   -- but a union with one recorded partner has its dot on that partner's own drop, and a line
+   through a number is the one thing a mark on a genealogy chart must not survive. */
+.union-ordinal {
+  text-anchor: middle;
+  fill: var(--chart-text, #2c2822);
+  stroke: var(--chart-bg, #fbfaf7);
+  stroke-width: 3;
+  paint-order: stroke fill;
 }
 
 .person,

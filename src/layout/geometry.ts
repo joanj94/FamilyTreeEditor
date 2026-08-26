@@ -86,6 +86,20 @@ export const GEOMETRY: Geometry = {
    * a generation is a row, so everything belonging to that generation has to sit on it.
    */
   laneH: 14,
+  /**
+   * How deep the lane stack may reach, counted in lanes.
+   *
+   * The companion pipeline's cap, and it is a vertical envelope rather than a count of unions:
+   * `(lanes - 1) * laneH` is the furthest below `top` a dot was ever put, which is what keeps the
+   * sibling bar under it clear of the children's boxes.
+   *
+   * It is no longer a limit on how many lanes a row may open. A row needing more than this used
+   * to put the extra unions into the last lane, and two unions sharing a height draw as a single
+   * unbroken stroke joining four people who were in two separate couples -- the exact fault the
+   * lanes exist to prevent, reappearing at five marriages. So the heights stay distinct and the
+   * spacing gives instead: a row past the envelope squeezes into it. Rows within it -- which is
+   * nearly all of them -- are laid out exactly as the port always did.
+   */
   lanes: 4,
   /** How close two connectors may come before they count as touching. */
   laneSlop: 6,

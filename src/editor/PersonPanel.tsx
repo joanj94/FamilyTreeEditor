@@ -27,7 +27,7 @@ import {
   type Command,
 } from './commands.js';
 import { eventDate, nameOf, writeEvent, writeName } from './fields.js';
-import { displayName } from '../render/scene.js';
+import { DEATH_SIGN, displayName, displayXref, sexSign, sexWord } from '../model/labels.js';
 import type { GedcomDoc, Individual, IndividualEventTag, Sex, Xref } from '../model/types.js';
 
 export interface PersonPanelProps {
@@ -37,6 +37,9 @@ export interface PersonPanelProps {
   readonly onSelect: (xref: Xref) => void;
 }
 
+/* The sign beside each option is the one the chart draws, so the value chosen here and the mark
+   that appears on the box are recognisably the same thing. The word stays: a list of bare signs
+   is a puzzle, and it is the word a screen reader has to read out. */
 const SEXES: readonly { readonly value: Sex; readonly label: string }[] = [
   { value: 'M', label: 'Male' },
   { value: 'F', label: 'Female' },
@@ -44,10 +47,20 @@ const SEXES: readonly { readonly value: Sex; readonly label: string }[] = [
   { value: 'U', label: 'Undetermined' },
 ];
 
-const DATED: readonly { readonly tag: IndividualEventTag; readonly label: string }[] = [
+/**
+ * The dated events this panel edits, and the sign a filled one earns.
+ *
+ * Only a death has one. A dagger against the field is the same mark the chart puts in the box, so
+ * typing a date of death and seeing the sign appear says what that date means to the drawing.
+ */
+const DATED: readonly {
+  readonly tag: IndividualEventTag;
+  readonly label: string;
+  readonly sign?: string;
+}[] = [
   { tag: 'BIRT', label: 'Born' },
   { tag: 'BAPM', label: 'Baptised' },
-  { tag: 'DEAT', label: 'Died' },
+  { tag: 'DEAT', label: 'Died', sign: DEATH_SIGN },
   { tag: 'BURI', label: 'Buried' },
 ];
 
@@ -58,6 +71,8 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
     return <p className="panel-empty">That person is no longer here.</p>;
 
   const parts = nameOf(person);
+  const died = eventDate(person, 'DEAT');
+  const sign = sexSign(person.sex);
   const families = (person.familiesAsSpouse ?? []).map((link) => link.xref);
   const links = families.length + (person.familiesAsChild ?? []).length;
 
@@ -88,8 +103,16 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
 
   return (
     <div className="panel">
-      <h2>{displayName(person)}</h2>
-      <p className="xref">{xref}</p>
+      <h2>
+        {sign === '' ? null : (
+          <span className="sign" title={sexWord(person.sex)}>{`${sign} `}</span>
+        )}
+        {displayName(person)}
+        {died === '' ? null : (
+          <span className="sign" title={`Died ${died}`}>{` ${DEATH_SIGN}`}</span>
+        )}
+      </h2>
+      <p className="xref">{displayXref(xref)}</p>
 
       <div className="field">
         <label htmlFor={`${id}-given`}>Given name</label>
@@ -145,7 +168,7 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
         >
           {SEXES.map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {`${sexSign(option.value)} ${option.label}`}
             </option>
           ))}
         </select>
@@ -153,7 +176,11 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
 
       {DATED.map((event) => (
         <div className="field" key={event.tag}>
-          <label htmlFor={`${id}-${event.tag}`}>{event.label}</label>
+          <label htmlFor={`${id}-${event.tag}`}>
+            {event.sign === undefined || eventDate(person, event.tag) === ''
+              ? event.label
+              : `${event.label} ${event.sign}`}
+          </label>
           <input
             id={`${id}-${event.tag}`}
             key={`${xref}-${event.tag}-${eventDate(person, event.tag)}`}
@@ -197,7 +224,7 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
               run(addChild(family));
             }}
           >
-            Add a child to {family}
+            Add a child to {displayXref(family)}
           </button>
         ))}
       </div>
@@ -242,7 +269,7 @@ function Related({
   const nameOfXref = (who: Xref | undefined): string => {
     if (who === undefined) return '';
     const found = doc.individuals.find((one) => one.xref === who);
-    return found === undefined ? who : displayName(found);
+    return found === undefined ? displayXref(who) : displayName(found);
   };
 
   return (
@@ -251,7 +278,7 @@ function Related({
       {families.map((family) => (
         <div key={family.xref}>
           <p className="family-of">
-            {family.xref}: {nameOfXref(family.husband) || '—'} and{' '}
+            {displayXref(family.xref)}: {nameOfXref(family.husband) || '—'} and{' '}
             {nameOfXref(family.wife) || '—'}
           </p>
           <ul>

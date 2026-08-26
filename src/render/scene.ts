@@ -13,12 +13,19 @@ import { fitText } from '../layout/text.js';
 import { widthOf } from '../layout/widths.js';
 import { childrenOf, spousesOf } from '../layout/relations.js';
 import { ortho } from './ortho.js';
-import { displayName, displayYears } from '../model/labels.js';
+import { ordinal } from '../layout/pack.js';
+import { displayCaption, displayMarks, displayName, displayXref } from '../model/labels.js';
 import type { GedcomDoc, Sex, Xref } from '../model/types.js';
 
 /* The chart's reading of a record is shared with the layout, which sizes the boxes from it. Kept
    exported here as well: the scene is where a caller looks for what a box says. */
-export { displayName, displayYears } from '../model/labels.js';
+export {
+  displayCaption,
+  displayMarks,
+  displayName,
+  displayXref,
+  displayYears,
+} from '../model/labels.js';
 
 /** A person's box. */
 export interface PersonBox {
@@ -37,8 +44,20 @@ export interface PersonBox {
    * the only place that can be asserted without mounting anything.
    */
   readonly label: string;
-  /** Birth and death years, where the record gives them. */
-  readonly years: string;
+  /**
+   * The line under the name: the sign for the sex, then the years, a death carrying its dagger.
+   *
+   * One string because it is one line, and because this is what the box was measured against --
+   * see `personWidth`.
+   */
+  readonly marks: string;
+  /**
+   * The same facts in words, for the accessible label.
+   *
+   * A screen reader given `marks` says "female sign" and "dagger", which describes the drawing
+   * rather than the person. Signs are for the eye; this is for the ear.
+   */
+  readonly caption: string;
   readonly sex?: Sex;
 }
 
@@ -47,6 +66,27 @@ export interface UnionDot {
   readonly id: Xref;
   readonly x: number;
   readonly y: number;
+  /**
+   * Which of a partner's marriages this is, or 0 where neither of them married more than once.
+   *
+   * The same number the descents below it carry. It is drawn at the dot as well because a folded
+   * union has no descents to carry it, and because a reader asking which marriage a couple is
+   * should be able to ask the couple rather than their children.
+   */
+  readonly ordinal: number;
+  /**
+   * The height that number is written at: just above the dot it names.
+   *
+   * It sat above the whole lane stack instead, to keep it off the sideways runs. That holds for
+   * two unions and falls apart past them -- every extra marriage on the row opens another lane
+   * and drops the dots by one more lane's height, while the mark stayed where it was. At four
+   * marriages it floated 48 units up with three connectors between it and the dot, naming
+   * nothing. Sitting on the dot is what makes it coherent however many lanes the row uses, and
+   * a run passing behind it is knocked out by the halo in `chart.css` rather than avoided.
+   *
+   * Every dot on a row shares a height, so every mark on a row still lines up with every other.
+   */
+  readonly ordinalY: number;
   /** True where the union has children, which is what makes it foldable. */
   readonly foldable: boolean;
   readonly collapsed: boolean;
@@ -83,6 +123,9 @@ export interface Scene {
   readonly ordinals: readonly OrdinalMark[];
   readonly bounds: Bounds;
 }
+
+/** How far above its dot a union's marriage number is written, clearing the dot's own radius. */
+const MARK_LIFT = 11;
 
 /** Everyone below a union, however deep, counted once. */
 function descendantsOf(layout: Layout, family: Xref): number {
@@ -129,7 +172,7 @@ export function buildScene(
 
   const persons = [...layout.positions].map<PersonBox>(([id, at]) => {
     const individual = byXref.get(id);
-    const name = individual === undefined ? id : displayName(individual);
+    const name = individual === undefined ? displayXref(id) : displayName(individual);
     /* The width the pack made room for, so the box drawn is the box its neighbours were placed
        around. */
     const width = widthOf(layout.widths, id);
@@ -141,7 +184,8 @@ export function buildScene(
       height: GEOMETRY.nodeH,
       name,
       label: fitText(name, width - 2 * GEOMETRY.nodePadX, GEOMETRY.nameSize),
-      years: individual === undefined ? '' : displayYears(individual),
+      marks: individual === undefined ? '' : displayMarks(individual),
+      caption: individual === undefined ? name : displayCaption(individual),
       ...(individual?.sex === undefined ? {} : { sex: individual.sex }),
     };
   });
@@ -156,6 +200,11 @@ export function buildScene(
       id: family,
       x: spot.x,
       y: spot.y,
+      /* Read from the relations rather than from the laid-out spot: the spot only carries an
+         ordinal where it has children to draw, and a childless or folded remarriage is still the
+         second marriage. */
+      ordinal: ordinal(family, layout.relations),
+      ordinalY: spot.y - MARK_LIFT,
       foldable,
       collapsed: collapsed.has(family),
       hiding: collapsed.has(family) ? descendantsOf(layout, family) : 0,

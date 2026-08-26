@@ -9,7 +9,7 @@
  * earlier versions of GEDCOM and carry no requirement about the people in them, which is why this
  * panel labels them "Partner" and says which tag each one is.
  */
-import { useId } from 'react';
+import { useId, useMemo } from 'react';
 
 import {
   addChild,
@@ -20,7 +20,9 @@ import {
   type Command,
 } from './commands.js';
 import { parseDateValue } from '../gedcom/dates.js';
-import { displayName } from '../render/scene.js';
+import { ordinal } from '../layout/pack.js';
+import { readRelations, unionsOf } from '../layout/relations.js';
+import { displayName, displayXref } from '../model/labels.js';
 import type { FamilyEventTag, GedcomDoc, Xref } from '../model/types.js';
 
 export interface UnionPanelProps {
@@ -37,16 +39,27 @@ const DATED: readonly { readonly tag: FamilyEventTag; readonly label: string }[]
 
 export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
   const id = useId();
+  /* The same reading the chart is drawn from, so the number said here is the number drawn there.
+     Memoised because it walks the whole document and the panel re-renders on every edit. */
+  const relations = useMemo(() => readRelations(doc), [doc]);
   const family = doc.families.find((one) => one.xref === xref);
   if (family === undefined) return <p className="panel-empty">That union is no longer here.</p>;
 
   const nameOfXref = (who: Xref | undefined): string => {
     if (who === undefined) return '';
     const found = doc.individuals.find((one) => one.xref === who);
-    return found === undefined ? who : displayName(found);
+    return found === undefined ? displayXref(who) : displayName(found);
   };
 
   const children = family.children ?? [];
+
+  /* Which of a partner's marriages this is. Zero where neither of them married more than once,
+     and nothing is said in that case -- a number that is always 1 tells a reader nothing. It is
+     derived from the order of that partner's unions, never from anything written in the file. */
+  const mark = ordinal(xref, relations);
+  const remarried = [family.husband, family.wife].find(
+    (who) => who !== undefined && unionsOf(relations, who).length > 1,
+  );
 
   const setDate = (tag: FamilyEventTag, written: string): void => {
     const current = family.events?.find((event) => event.tag === tag)?.date?.value ?? '';
@@ -71,7 +84,13 @@ export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
       <h2>
         {nameOfXref(family.husband) || 'Unknown'} and {nameOfXref(family.wife) || 'Unknown'}
       </h2>
-      <p className="xref">{xref}</p>
+      <p className="xref">{displayXref(xref)}</p>
+
+      {mark === 0 ? null : (
+        <p className="marriage-number" title="Counted from the order of that partner's unions.">
+          Marriage ({mark}){remarried === undefined ? '' : ` of ${nameOfXref(remarried)}`}
+        </p>
+      )}
 
       {(['HUSB', 'WIFE'] as const).map((role) => {
         const who = role === 'HUSB' ? family.husband : family.wife;

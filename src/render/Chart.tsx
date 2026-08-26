@@ -21,7 +21,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import { computeLayout } from '../layout/layout.js';
-import { buildScene } from './scene.js';
+import { buildScene, displayXref } from './scene.js';
 import {
   beginDrag,
   controlScale,
@@ -225,7 +225,9 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
               data-id={person.id}
               role="button"
               tabIndex={0}
-              aria-label={person.years === '' ? person.name : `${person.name}, ${person.years}`}
+              /* Spoken from the caption, not from the marks: ♀ and † are read out as "female
+                 sign" and "dagger", which describes the drawing rather than the person. */
+              aria-label={person.caption}
               onClick={(event) => {
                 if (chose(event)) onSelectPerson?.(person.id);
               }}
@@ -247,9 +249,9 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
               <text className="name" x={person.x + person.width / 2} y={person.y + 24}>
                 {person.label}
               </text>
-              {person.years === '' ? null : (
-                <text className="years" x={person.x + person.width / 2} y={person.y + 42}>
-                  {person.years}
+              {person.marks === '' ? null : (
+                <text className="marks" x={person.x + person.width / 2} y={person.y + 42}>
+                  {person.marks}
                 </text>
               )}
             </g>
@@ -262,7 +264,11 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
                 data-id={union.id}
                 role="button"
                 tabIndex={0}
-                aria-label={`Union ${union.id}`}
+                aria-label={
+                  union.ordinal > 0
+                    ? `Union ${displayXref(union.id)}, marriage ${String(union.ordinal)}`
+                    : `Union ${displayXref(union.id)}`
+                }
                 onClick={(event) => {
                   if (chose(event)) onSelectUnion?.(union.id);
                 }}
@@ -272,6 +278,19 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
               >
                 <circle className="hit" cx={union.x} cy={union.y} r={11} />
                 <circle className="union" cx={union.x} cy={union.y} r={5} />
+                {/* The same `(n)` the descents below carry: one number, said in both places, so a
+                    reader need not follow a line down to a child to learn which marriage they are
+                    looking at.
+
+                    Centred on the dot rather than set off to one side of it. Offset, it floated
+                    diagonally away from the union it belongs to and read as a mark on nothing;
+                    over the dot, the drop from the run leads the eye straight down to what it
+                    names. Its height is the scene's -- see `ordinalY`. */}
+                {union.ordinal > 0 ? (
+                  <text className="ordinal union-ordinal" x={union.x} y={union.ordinalY}>
+                    {`(${String(union.ordinal)})`}
+                  </text>
+                ) : null}
               </g>
 
               {union.foldable ? (
@@ -286,8 +305,8 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
                   aria-expanded={!union.collapsed}
                   aria-label={
                     union.collapsed
-                      ? `Expand the branch below ${union.id}`
-                      : `Collapse the branch below ${union.id}`
+                      ? `Expand the branch below ${displayXref(union.id)}`
+                      : `Collapse the branch below ${displayXref(union.id)}`
                   }
                   onClick={(event) => {
                     toggleFold(union.id, event);

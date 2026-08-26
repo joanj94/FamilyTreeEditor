@@ -236,6 +236,34 @@ describe('union placement', () => {
     expect(layout.unions.get('@F2@')?.lane).toBe(0);
   });
 
+  it('never puts two unions on one height, however many times a person married', () => {
+    /* Two unions sharing a lane draw as a single unbroken stroke joining four people who were in
+       two separate couples. The lane count used to be capped, and the fifth marriage on a row was
+       pushed into the last lane -- so the fault the lanes exist to prevent came back at five. */
+    for (const times of [2, 4, 5, 6, 9]) {
+      const doc = tree(
+        ['@I1@', ...Array.from({ length: times }, (_, i) => `@P${String(i + 1)}@`)],
+        Object.fromEntries(
+          Array.from({ length: times }, (_, i) => [
+            `@F${String(i + 1)}@`,
+            { spouses: ['@I1@', `@P${String(i + 1)}@`], children: [] },
+          ]),
+        ),
+      );
+      const spots = [...computeLayout(doc).unions.values()];
+      expect(spots).toHaveLength(times);
+
+      // Every union that overlaps another gets a height of its own.
+      expect(new Set(spots.map((spot) => spot.runY)).size).toBe(times);
+
+      // And the stack stays inside the envelope, so the sibling bar below it still clears the
+      // children's boxes.
+      const top = Math.min(...spots.map((spot) => spot.runY));
+      const deepest = Math.max(...spots.map((spot) => spot.runY)) - top;
+      expect(deepest).toBeLessThanOrEqual((GEOMETRY.lanes - 1) * GEOMETRY.laneH);
+    }
+  });
+
   it('takes the ordinal from position, never from anything written in the file', () => {
     const doc = tree(['@HUB@', '@FIRST@', '@SECOND@', '@KID1@', '@KID2@'], {
       '@F1@': { spouses: ['@HUB@', '@FIRST@'], children: ['@KID1@'] },

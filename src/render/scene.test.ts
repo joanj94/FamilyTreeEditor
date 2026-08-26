@@ -9,7 +9,14 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { buildScene, displayName, displayYears } from './scene.js';
+import {
+  buildScene,
+  displayCaption,
+  displayMarks,
+  displayName,
+  displayXref,
+  displayYears,
+} from './scene.js';
 import { ortho } from './ortho.js';
 import { connectorSegments, type PathPoint } from '../layout/crossings.js';
 import { GEOMETRY, computeLayout } from '../layout/layout.js';
@@ -115,12 +122,24 @@ describe('what a box says', () => {
     ).toBe('GivenA SurnameB');
   });
 
-  it('draws an unnamed person under their identifier rather than as an empty box', () => {
-    // An empty box cannot be clicked with any confidence about what was clicked.
-    expect(displayName({ xref: '@I9@' })).toBe('@I9@');
+  it('draws an unnamed person under their identifier, without the delimiters', () => {
+    // An empty box cannot be clicked with any confidence about what was clicked -- and the record
+    // is called `I9`; the `@`s are syntax the parser needs and a reader does not.
+    expect(displayName({ xref: '@I9@' })).toBe('I9');
   });
 
-  it('takes the years from the parsed dates', () => {
+  it('shows an identifier as the record is named, not as the file delimits it', () => {
+    expect(displayXref('@I9@')).toBe('I9');
+    expect(displayXref('@F12@')).toBe('F12');
+  });
+
+  it('leaves an identifier that is not delimited alone rather than cutting into it', () => {
+    // Nothing requires the delimiters to be there by the time this is called, and a blind strip
+    // of the first and last character would eat a real one.
+    expect(displayXref('I9')).toBe('I9');
+  });
+
+  it('takes the years from the parsed dates and daggers the span', () => {
     expect(
       displayYears({
         xref: '@I1@',
@@ -129,7 +148,67 @@ describe('what a box says', () => {
           { tag: 'DEAT', date: { value: '1 JAN 1970', start: { year: 1970 } } },
         ],
       }),
-    ).toBe('1900–1970');
+    ).toBe('1900–1970 †');
+  });
+
+  it('marks a death as soon as a date is given, and not before', () => {
+    // Entering a date of death is what makes the chart say the person died.
+    const living = {
+      xref: '@I1@',
+      events: [{ tag: 'BIRT' as const, date: { value: '1900' } }],
+    };
+    expect(displayYears(living)).not.toContain('†');
+    expect(
+      displayYears({
+        ...living,
+        events: [...living.events, { tag: 'DEAT' as const, date: { value: '1970' } }],
+      }),
+    ).toContain('1970 †');
+  });
+
+  it('marks a death whose date this parser could not read, since a date was still given', () => {
+    expect(
+      displayYears({ xref: '@I1@', events: [{ tag: 'DEAT', date: { value: 'in the war' } }] }),
+    ).toBe('–in the war †');
+  });
+
+  it('puts the sex sign in front and the dagger after, as one measured line', () => {
+    expect(
+      displayMarks({
+        xref: '@I1@',
+        sex: 'F',
+        events: [{ tag: 'DEAT', date: { value: '1970', start: { year: 1970 } } }],
+      }),
+    ).toBe('♀ –1970 †');
+  });
+
+  it('gives each sex its own sign, and a record without one no sign at all', () => {
+    // An absent SEX and an undetermined one are different claims; drawing them alike would be
+    // inventing one of them.
+    expect(displayMarks({ xref: '@I1@', sex: 'M' })).toBe('♂');
+    expect(displayMarks({ xref: '@I1@', sex: 'F' })).toBe('♀');
+    expect(displayMarks({ xref: '@I1@', sex: 'X' })).toBe('⚧');
+    expect(displayMarks({ xref: '@I1@', sex: 'U' })).toBe('?');
+    expect(displayMarks({ xref: '@I1@' })).toBe('');
+  });
+
+  it('speaks the same facts in words, because a glyph is read out as its typography', () => {
+    // A screen reader says "female sign" and "dagger" for ♀ and †, which describes the drawing
+    // rather than the person.
+    expect(
+      displayCaption({
+        xref: '@I1@',
+        sex: 'F',
+        names: [{ value: 'GivenA /SurnameB/' }],
+        events: [
+          { tag: 'BIRT', date: { value: '1900', start: { year: 1900 } } },
+          { tag: 'DEAT', date: { value: '1970', start: { year: 1970 } } },
+        ],
+      }),
+    ).toBe('GivenA SurnameB, female, born 1900, died 1970');
+    expect(displayCaption({ xref: '@I1@', names: [{ value: 'GivenA /SurnameB/' }] })).toBe(
+      'GivenA SurnameB',
+    );
   });
 
   it('shows an unparsed date as written rather than showing nothing', () => {
@@ -204,6 +283,60 @@ describe('the scene', () => {
     const byId = new Map(scened(doc).unions.map((union) => [union.id, union]));
     expect(byId.get('@F1@')?.foldable).toBe(true);
     expect(byId.get('@F2@')?.foldable).toBe(false);
+  });
+
+  it('numbers the dot of a remarriage too, so a folded union still says which marriage it is', () => {
+    const remarried = tree(
+      { '@I1@': {}, '@I2@': {}, '@I3@': {}, '@I4@': {} },
+      {
+        '@F1@': { spouses: ['@I1@', '@I2@'], children: ['@I4@'] },
+        '@F2@': { spouses: ['@I1@', '@I3@'], children: [] },
+      },
+    );
+    const byId = new Map(scened(remarried).unions.map((union) => [union.id, union]));
+    expect(byId.get('@F1@')?.ordinal).toBe(1);
+    /* Childless, so the spot carries no ordinal and the descents carry none either -- the number
+       has to come from the relations or the second marriage goes unmarked. */
+    expect(byId.get('@F2@')?.ordinal).toBe(2);
+
+    const shut = new Map(
+      scened(remarried, new Set(['@F1@'])).unions.map((union) => [union.id, union]),
+    );
+    expect(shut.get('@F1@')?.ordinal).toBe(1);
+  });
+
+  it('keeps the number on its dot however many lanes the row opens', () => {
+    /* The fault this answers: the mark was placed above the whole lane stack, to keep it off the
+       sideways runs. Every extra marriage on a row opens another lane and drops the dots by one
+       more lane's height, while the mark stayed put -- at four marriages it floated 48 units up,
+       with three connectors between it and the dot it was naming. */
+    const remarried = (times: number): GedcomDoc =>
+      tree(
+        Object.fromEntries([
+          ['@I1@', {}],
+          ...Array.from({ length: times }, (_, i) => [`@P${String(i + 1)}@`, {}] as const),
+        ]),
+        Object.fromEntries(
+          Array.from({ length: times }, (_, i) => [
+            `@F${String(i + 1)}@`,
+            { spouses: ['@I1@', `@P${String(i + 1)}@`], children: [] },
+          ]),
+        ),
+      );
+
+    for (const times of [2, 3, 4, 5, 6]) {
+      const scene = scened(remarried(times));
+      expect(scene.unions).toHaveLength(times);
+      for (const union of scene.unions) {
+        expect(union.y - union.ordinalY).toBe(11);
+      }
+      // One height for every mark on the row, because every dot on a row shares one.
+      expect(new Set(scene.unions.map((union) => union.ordinalY)).size).toBe(1);
+    }
+  });
+
+  it('leaves a union unnumbered where neither partner married more than once', () => {
+    expect(scened(household).unions.map((union) => union.ordinal)).toEqual([0]);
   });
 
   it('numbers the descent of a remarriage and leaves a single union unmarked', () => {

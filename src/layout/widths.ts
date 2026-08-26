@@ -16,17 +16,19 @@
  */
 import { GEOMETRY } from './geometry.js';
 import { measureText } from './text.js';
-import { displayName, displayYears } from '../model/labels.js';
+import { displayMarks, displayName } from '../model/labels.js';
 import type { GedcomDoc, Individual, Xref } from '../model/types.js';
 
 /** Person to the width of their box. A person the map does not name is drawn at `nodeW`. */
 export type Widths = ReadonlyMap<Xref, number>;
 
-/** The width of one box: its name, its years, the padding, and the floor and ceiling. */
+/** The width of one box: its name, the marks under it, the padding, and the floor and ceiling. */
 export function personWidth(individual: Individual): number {
   const name = measureText(displayName(individual), GEOMETRY.nameSize);
-  const years = measureText(displayYears(individual), GEOMETRY.yearsSize);
-  const wanted = Math.max(name, years) + 2 * GEOMETRY.nodePadX;
+  /* The whole second line, signs included: a sex sign the width did not know about is a sign
+     drawn past the edge of the box made for it. */
+  const marks = measureText(displayMarks(individual), GEOMETRY.yearsSize);
+  const wanted = Math.max(name, marks) + 2 * GEOMETRY.nodePadX;
   const fitted = Math.min(Math.max(wanted, GEOMETRY.nodeW), GEOMETRY.nodeMaxW);
   /* To an even number, so a centred box lands on a whole pixel and the connector meeting it is
      not drawn on a half. */

@@ -101,7 +101,8 @@ describe('results wait their turn', () => {
     const region = container.querySelector('.saved');
     expect(region?.getAttribute('role')).toBe('status');
     expect(region?.textContent).toContain('SEX value X');
-    expect(region?.textContent).toContain('@I1@');
+    /* The record is named `I1`; the `@`s are the file's delimiters and say nothing to a reader. */
+    expect(region?.textContent).toContain('(I1)');
   });
 
   it('shows an export that lost nothing without an empty list beneath it', () => {
