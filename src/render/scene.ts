@@ -172,8 +172,10 @@ export function buildScene(
       hiding: collapsed.has(family) ? descendantsOf(layout, family) : 0,
     });
 
-    // Down from each box, then sideways to the dot. The sideways run is what the lanes exist to
-    // separate: two of them sharing a y drew as one unbroken stroke.
+    // Down from each box, sideways in this union's own lane, then down again to the dot. The
+    // sideways run is what the lanes exist to separate: two of them sharing a height drew as one
+    // unbroken stroke. The last drop is what keeps every dot on the row level anyway -- on the
+    // topmost lane it has no length, and the path is the two-corner one it has always been.
     for (const spouse of spousesOf(layout.relations, family)) {
       const centre = layout.centres.get(spouse);
       const at = layout.positions.get(spouse);
@@ -183,7 +185,8 @@ export function buildScene(
         kind: 'spouse',
         d: ortho([
           [centre, at.y + GEOMETRY.nodeH],
-          [centre, spot.y],
+          [centre, spot.runY],
+          [spot.x, spot.runY],
           [spot.x, spot.y],
         ]),
       });

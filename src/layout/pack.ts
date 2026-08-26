@@ -17,19 +17,46 @@
  * **Each union gets its own horizontal lane.** A spouse link runs down from the box and then
  * sideways to the dot, so two unions sharing a row and standing side by side drew one unbroken
  * stroke: it read as a single union joining eight people who were in four separate couples.
+ *
+ * **Who sits next to whom is not decided here.** The pack centres a block over its children and
+ * pushes right where that will not fit; *which* children, and in what order, arrives as a
+ * `BlockOrder`. Left alone it is the block tree's own order and the arithmetic below is unchanged,
+ * which is the point: the neighbours a block is given can be chosen to stop connectors crossing
+ * without any of the placement being touched.
  */
 import { GEOMETRY } from './geometry.js';
 import { childrenOf, spousesOf, unionsOf, type Relations } from './relations.js';
 import type { Blocks } from './blocks.js';
 import type { Xref } from '../model/types.js';
 
+/** The top-left corner of a person's box. */
+export interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
 /** Where a union's dot sits, and how its descent is routed from there. */
 export interface UnionPlacement {
   /** The couple's own midpoint. */
   readonly x: number;
+  /**
+   * The dot's height, which is the same for every union on the row.
+   *
+   * A generation is a row, so everything belonging to it has to sit on one line. Dots at
+   * different heights were reported as incoherent -- and a fold box hanging off each of them made
+   * two families read as one knot of hardware at two depths.
+   */
   readonly y: number;
-  /** Which horizontal lane this union's connector runs in. */
+  /** Which horizontal lane this union's spouse links run in. */
   readonly lane: number;
+  /**
+   * The height the sideways run to the dot is drawn at, which is what the lane moves.
+   *
+   * At or above `y`: the link drops from the box to here, runs sideways, and drops again to the
+   * dot. On the topmost lane of a row the second drop has no length and the two are the same
+   * height, which is the ordinary case and draws exactly as it always did.
+   */
+  readonly runY: number;
   /** Which of a parent's unions this is, or 0 where they married once. */
   readonly ordinal?: number;
   /** The sibling bar. Absent where the union has no drawn children. */
@@ -51,6 +78,50 @@ export interface Packing {
 }
 
 /**
+ * Which blocks hang under this one, in the order the block tree itself gives them.
+ *
+ * A folded union contributes none, which is the whole of what folding does to the geometry.
+ * Shared with whatever is choosing an order, so that the set of blocks being ordered and the set
+ * being placed cannot come apart.
+ */
+export function childBlocks(
+  blocks: Blocks,
+  relations: Relations,
+  anchor: Xref,
+  collapsed: ReadonlySet<Xref> = new Set(),
+): readonly Xref[] {
+  return (blocks.families.get(anchor) ?? [])
+    .filter((family) => !collapsed.has(family))
+    .flatMap((family) => childrenOf(relations, family));
+}
+
+/**
+ * Who sits next to whom, left to right.
+ *
+ * Two lists and nothing else: the root blocks in the order they are laid down, and each block's
+ * children in the order they are laid under it. Everything the pack does with them -- centring,
+ * pushing right -- is unchanged by which order it is handed.
+ *
+ * **It is a preference, not a census.** A block the order does not name is still placed, after the
+ * ones it does, and a block it names twice is placed once. An ordering pass may therefore speak
+ * only about the blocks it has an opinion on, and can never make one vanish from the drawing --
+ * which is the failure that would be hardest to see and worst to ship.
+ */
+export interface BlockOrder {
+  readonly roots: readonly Xref[];
+  readonly childrenOf: (anchor: Xref) => readonly Xref[];
+}
+
+/** The preferred order first, then whatever it left out, and nothing twice. */
+function arrange(preferred: readonly Xref[], placeable: readonly Xref[]): readonly Xref[] {
+  const left = new Set(placeable);
+  const arranged: Xref[] = [];
+  for (const anchor of preferred) if (left.delete(anchor)) arranged.push(anchor);
+  for (const anchor of placeable) if (left.delete(anchor)) arranged.push(anchor);
+  return arranged;
+}
+
+/**
  * The left edge of every block, in layout coordinates.
  *
  * A folded union is not traversed, so its descendants are never placed and the tree closes up
@@ -61,6 +132,7 @@ export function pack(
   blocks: Blocks,
   relations: Relations,
   collapsed: ReadonlySet<Xref> = new Set(),
+  order?: BlockOrder,
 ): Packing {
   const left = new Map<Xref, number>();
   const visible = new Set<Xref>();
@@ -71,10 +143,18 @@ export function pack(
     return count * GEOMETRY.nodeW + (count - 1) * GEOMETRY.gapX;
   };
 
-  const kidsOf = (anchor: Xref): readonly Xref[] =>
-    (blocks.families.get(anchor) ?? [])
-      .filter((family) => !collapsed.has(family))
-      .flatMap((family) => childrenOf(relations, family));
+  /* Cached because `shift` walks the same subtree again on every push, and because an order that
+     is consulted twice for one block must answer the same both times. */
+  const kids = new Map<Xref, readonly Xref[]>();
+  const kidsOf = (anchor: Xref): readonly Xref[] => {
+    const known = kids.get(anchor);
+    if (known !== undefined) return known;
+    const placeable = childBlocks(blocks, relations, anchor, collapsed);
+    const found =
+      order === undefined ? placeable : arrange(order.childrenOf(anchor), placeable);
+    kids.set(anchor, found);
+    return found;
+  };
 
   const shift = (anchor: Xref, dx: number): void => {
     left.set(anchor, (left.get(anchor) ?? 0) + dx);
@@ -110,8 +190,42 @@ export function pack(
     cursor.set(row, want + own + GEOMETRY.blockGap);
   };
 
-  for (const root of blocks.roots) place(root);
+  const roots = order === undefined ? blocks.roots : arrange(order.roots, blocks.roots);
+  for (const root of roots) place(root);
   return { left, visible };
+}
+
+/**
+ * Where each person's box lands, once their block has been placed.
+ *
+ * A block is a row of boxes side by side, so a person's x is their block's left edge plus their
+ * slot in it, and their y is their block's row. Kept here beside the packing rather than in the
+ * caller, because an ordering pass has to be able to score a trial packing by exactly the same
+ * arithmetic the drawing will use -- a trial scored against slightly different coordinates would
+ * optimise a chart nobody sees.
+ */
+export function spread(
+  blocks: Blocks,
+  packing: Packing,
+): {
+  readonly positions: ReadonlyMap<Xref, Point>;
+  readonly centres: ReadonlyMap<Xref, number>;
+} {
+  const positions = new Map<Xref, Point>();
+  for (const [anchor, people] of blocks.members) {
+    if (!packing.visible.has(anchor)) continue;
+    const anchorLeft = packing.left.get(anchor) ?? 0;
+    people.forEach((person, slot) => {
+      positions.set(person, {
+        x: anchorLeft + slot * (GEOMETRY.nodeW + GEOMETRY.gapX),
+        y: (blocks.personDepth.get(person) ?? 0) * GEOMETRY.rowH,
+      });
+    });
+  }
+
+  const centres = new Map<Xref, number>();
+  for (const [person, at] of positions) centres.set(person, at.x + GEOMETRY.nodeW / 2);
+  return { positions, centres };
 }
 
 /**
@@ -206,6 +320,10 @@ export function placeUnions(
       return left.family < right.family ? -1 : left.family > right.family ? 1 : 0;
     });
 
+    /* Lanes first, and the whole row's worth of them, because the dots hang at the height of the
+       deepest one used. Assigning a lane and placing a dot in the same pass would put the first
+       union's dot at a height the row had not finished deciding. */
+    const lanes = new Map<Xref, number>();
     for (const union of ordered) {
       let lane = laneEnd.findIndex((end) => end < union.from - GEOMETRY.laneSlop);
       if (lane === -1) {
@@ -217,14 +335,22 @@ export function placeUnions(
         }
       }
       laneEnd[lane] = union.to;
+      lanes.set(union.family, lane);
+    }
+    const top = row * GEOMETRY.rowH + GEOMETRY.nodeH + GEOMETRY.unionDrop;
+    const deepest = Math.max(0, ...lanes.values());
+    /* One height for every dot on the row. A row using one lane -- which is nearly all of them --
+       is unchanged by this. */
+    const y = top + deepest * GEOMETRY.laneH;
 
-      const y =
-        row * GEOMETRY.rowH + GEOMETRY.nodeH + GEOMETRY.unionDrop + lane * GEOMETRY.laneH;
+    for (const union of ordered) {
+      const lane = lanes.get(union.family) ?? 0;
+      const runY = top + lane * GEOMETRY.laneH;
       const kids = collapsed.has(union.family) ? [] : childrenOf(relations, union.family);
       const drawn = kids.filter((child) => centre.has(child));
 
       if (drawn.length === 0) {
-        placed.set(union.family, { x: union.x, y, lane });
+        placed.set(union.family, { x: union.x, y, lane, runY });
         continue;
       }
 
@@ -251,6 +377,7 @@ export function placeUnions(
         x: union.x,
         y,
         lane,
+        runY,
         ordinal: mark,
         barY: bar,
         barFrom: lo,

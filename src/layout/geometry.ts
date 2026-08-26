@@ -42,16 +42,18 @@ export const GEOMETRY: Geometry = {
   /** How far under the boxes a union dot hangs. */
   unionDrop: 30,
   /**
-   * Union connectors are stacked in lanes. Two unions sharing a row and standing side by side
+   * How far apart two union connectors run. Two unions sharing a row and standing side by side
    * drew one unbroken stroke, which read as a single union joining eight people who were in four
-   * separate couples; giving each its own horizontal is what breaks the join.
+   * separate couples; giving each horizontal its own height is what breaks the join.
    *
-   * Raised from the ported 14 to clear the fold box. A control is 26 tall and hangs 6 below its
-   * own dot, so at 14 the box belonging to one union ended level with the dot of the next and the
-   * two read as a single knot of hardware rather than as two families. Separating them is worth
-   * more than the vertical space it costs: this drawing is read, not packed.
+   * **A lane moves the sideways run, never the dot.** Every dot on a row hangs at one height, so
+   * the fold boxes stand side by side instead of stacking -- which is why this is back at the
+   * ported 14 after a spell at 30. The 30 was there to stop one union's fold box ending level
+   * with the next union's dot, and dots that are all level cannot do that. Two unions at
+   * different heights on the same row were reported as incoherent, and they were: the chart says
+   * a generation is a row, so everything belonging to that generation has to sit on it.
    */
-  laneH: 30,
+  laneH: 14,
   lanes: 4,
   /** How close two connectors may come before they count as touching. */
   laneSlop: 6,

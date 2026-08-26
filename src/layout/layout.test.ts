@@ -15,7 +15,8 @@ import { describe, expect, it } from 'vitest';
 
 import { GEOMETRY, computeLayout } from './layout.js';
 import { buildBlocks, depths } from './blocks.js';
-import { ordinal, placeUnions } from './pack.js';
+import { childBlocks, ordinal, pack, placeUnions, spread } from './pack.js';
+import { countCrossings } from './crossings.js';
 import { readRelations } from './relations.js';
 import type { Family, GedcomDoc, Individual, Xref } from '../model/types.js';
 
@@ -188,16 +189,39 @@ describe('union placement', () => {
     expect(union?.stemY).toBeLessThan(union?.barY ?? 0);
   });
 
-  it('gives two overlapping unions on a row different lanes', () => {
-    // Two unions sharing a y drew one unbroken stroke that read as a single union joining four
-    // people. A remarriage forces the case: both unions meet at the shared spouse.
+  it('runs two overlapping unions on a row in different lanes', () => {
+    // Two unions whose sideways runs share a height drew one unbroken stroke that read as a
+    // single union joining four people. A remarriage forces the case: both unions meet at the
+    // shared spouse.
     const doc = tree(['@ANCHOR@', '@SPOUSEA@', '@SPOUSEB@'], {
       '@F1@': { spouses: ['@ANCHOR@', '@SPOUSEA@'], children: [] },
       '@F2@': { spouses: ['@ANCHOR@', '@SPOUSEB@'], children: [] },
     });
     const layout = computeLayout(doc);
     expect(layout.unions.get('@F1@')?.lane).not.toBe(layout.unions.get('@F2@')?.lane);
-    expect(layout.unions.get('@F1@')?.y).not.toBe(layout.unions.get('@F2@')?.y);
+    expect(layout.unions.get('@F1@')?.runY).not.toBe(layout.unions.get('@F2@')?.runY);
+  });
+
+  it('hangs both dots of a remarriage at the same height', () => {
+    // Reported from a screenshot: one dot 30px below the other, each with a fold box under it,
+    // reads as two generations rather than as one person married twice. A generation is a row.
+    const doc = tree(['@ANCHOR@', '@SPOUSEA@', '@SPOUSEB@'], {
+      '@F1@': { spouses: ['@ANCHOR@', '@SPOUSEA@'], children: [] },
+      '@F2@': { spouses: ['@ANCHOR@', '@SPOUSEB@'], children: [] },
+    });
+    const layout = computeLayout(doc);
+    expect(layout.unions.get('@F1@')?.y).toBe(layout.unions.get('@F2@')?.y);
+  });
+
+  it('drops a lane down to the dot rather than moving the dot up to the lane', () => {
+    // The run is what a lane moves. A dot that followed its lane is what made the chart look
+    // incoherent; a dot that stays put and is reached by one more corner does not.
+    const doc = tree(['@ANCHOR@', '@SPOUSEA@', '@SPOUSEB@'], {
+      '@F1@': { spouses: ['@ANCHOR@', '@SPOUSEA@'], children: [] },
+      '@F2@': { spouses: ['@ANCHOR@', '@SPOUSEB@'], children: [] },
+    });
+    const layout = computeLayout(doc);
+    for (const union of layout.unions.values()) expect(union.runY).toBeLessThanOrEqual(union.y);
   });
 
   it('keeps two separated couples on one tidy line', () => {
@@ -275,6 +299,97 @@ describe('packing', () => {
       (at(doc, '@K1@') + at(doc, '@K2@')) / 2,
       6,
     );
+  });
+});
+
+describe('the packing order', () => {
+  // Ordering is separable from placement: the pack decides where a block goes, never who it goes
+  // next to. These hold that seam open, because everything that reduces crossings happens on one
+  // side of it and every geometric invariant is defended on the other.
+  const cousins = tree(['@A@', '@B@', '@KA@', '@C@', '@D@', '@KC@'], {
+    '@F1@': { spouses: ['@A@', '@B@'], children: ['@KA@'] },
+    '@F2@': { spouses: ['@C@', '@D@'], children: ['@KC@'] },
+  });
+  const relations = readRelations(cousins);
+  const groups = buildBlocks(relations, depths(relations));
+  const asBuilt = (anchor: Xref) => childBlocks(groups, relations, anchor);
+
+  it('places everything exactly as before when handed the order it would have used', () => {
+    const before = pack(groups, relations);
+    const after = pack(groups, relations, new Set(), {
+      roots: groups.roots,
+      childrenOf: asBuilt,
+    });
+    expect([...after.left]).toEqual([...before.left]);
+  });
+
+  it('lays the roots down in the order it is given', () => {
+    const reversed = pack(groups, relations, new Set(), {
+      roots: [...groups.roots].reverse(),
+      childrenOf: asBuilt,
+    });
+    const before = pack(groups, relations);
+    const first = groups.roots[0] ?? '';
+    const last = groups.roots[groups.roots.length - 1] ?? '';
+    expect(before.left.get(first)).toBeLessThan(before.left.get(last) ?? 0);
+    expect(reversed.left.get(first)).toBeGreaterThan(reversed.left.get(last) ?? 0);
+  });
+
+  it('still places a block the order forgot to mention', () => {
+    // An order is a preference. A block dropped from the drawing because nobody named it would be
+    // a missing person, which reads as a data error and is the most expensive fault here.
+    const partial = pack(groups, relations, new Set(), { roots: [], childrenOf: () => [] });
+    expect([...partial.visible].sort()).toEqual([...pack(groups, relations).visible].sort());
+  });
+
+  it('places a block the order names twice only once', () => {
+    const doubled = pack(groups, relations, new Set(), {
+      roots: [...groups.roots, ...groups.roots],
+      childrenOf: (anchor) => [...asBuilt(anchor), ...asBuilt(anchor)],
+    });
+    const plain = pack(groups, relations);
+    expect([...doubled.left]).toEqual([...plain.left]);
+  });
+});
+
+describe('connectors crossing each other', () => {
+  // The shape the chart was reported for. Both partners have parents, so neither can join the
+  // other's block -- each must anchor its own or it could not hang from its own family -- and the
+  // pack, knowing nothing of the marriage, put a stranger between them. Their connector then ran
+  // the width of the row, under every box in the way.
+  const marriedApart = tree(
+    [
+      '@HISDAD@',
+      '@HISMUM@',
+      '@HERDAD@',
+      '@HERMUM@',
+      '@HIM@',
+      '@SIB@',
+      '@HER@',
+      '@INLAW@',
+      '@KID@',
+    ],
+    {
+      '@F1@': { spouses: ['@HISDAD@', '@HISMUM@'], children: ['@SIB@', '@HIM@'] },
+      '@F2@': { spouses: ['@HERDAD@', '@HERMUM@'], children: ['@HER@'] },
+      '@F3@': { spouses: ['@HIM@', '@HER@'], children: [] },
+      '@F4@': { spouses: ['@SIB@', '@INLAW@'], children: ['@KID@'] },
+    },
+  );
+
+  it('crosses nothing, on the shape that used to cross everything', () => {
+    expect(countCrossings(computeLayout(marriedApart))).toBe(0);
+  });
+
+  it('would cross, packed in the order the block tree gives', () => {
+    // Without this the invariant above could pass because the tree is easy rather than because
+    // the ordering pass earned it, and would go on passing if the pass were deleted.
+    const relations = readRelations(marriedApart);
+    const groups = buildBlocks(relations, depths(relations));
+    const packing = pack(groups, relations);
+    const { positions, centres } = spread(groups, packing);
+    const unions = placeUnions(relations, groups.personDepth, centres);
+    expect(countCrossings({ relations, positions, centres, unions })).toBeGreaterThan(0);
   });
 });
 

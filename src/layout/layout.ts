@@ -9,27 +9,22 @@
  *
  * **The layout is computed from the graph, never from a chart's coordinates.** Reusing those would
  * draw a perfect copy that proves nothing. Rows come from descent depth; columns come from a tidy
- * tree over blocks.
+ * tree over blocks, packed in an order chosen to keep connectors from crossing.
  *
  * `blocks` is fold-independent, so a renderer that folds a union away re-packs from it rather than
  * asking for a different kind of layout.
  */
 import { GEOMETRY, type Geometry } from './geometry.js';
 import { buildBlocks, depths, type Blocks } from './blocks.js';
-import { pack, placeUnions, type UnionPlacement } from './pack.js';
+import { orderBlocks } from './ordering.js';
+import { pack, placeUnions, spread, type Point, type UnionPlacement } from './pack.js';
 import { readRelations, type Relations } from './relations.js';
 import type { GedcomDoc, Xref } from '../model/types.js';
 
 export { GEOMETRY, type Geometry } from './geometry.js';
-export { type UnionPlacement } from './pack.js';
+export { type Point, type UnionPlacement } from './pack.js';
 export { type Relations } from './relations.js';
 export { type Blocks } from './blocks.js';
-
-/** The top-left corner of a person's box. */
-export interface Point {
-  readonly x: number;
-  readonly y: number;
-}
 
 /** A block as the renderer sees it: who is in it, what it owns, which row it is on. */
 export interface BlockView {
@@ -68,22 +63,11 @@ export function computeLayout(doc: GedcomDoc, options: LayoutOptions = {}): Layo
   const relations = readRelations(doc);
   const groups = buildBlocks(relations, depths(relations));
   const depth = groups.personDepth;
-  const { left, visible } = pack(groups, relations, collapsed);
-
-  const positions = new Map<Xref, Point>();
-  for (const [anchor, people] of groups.members) {
-    if (!visible.has(anchor)) continue;
-    const anchorLeft = left.get(anchor) ?? 0;
-    people.forEach((person, slot) => {
-      positions.set(person, {
-        x: anchorLeft + slot * (GEOMETRY.nodeW + GEOMETRY.gapX),
-        y: (depth.get(person) ?? 0) * GEOMETRY.rowH,
-      });
-    });
-  }
-
-  const centres = new Map<Xref, number>();
-  for (const [person, at] of positions) centres.set(person, at.x + GEOMETRY.nodeW / 2);
+  /* Who sits next to whom is chosen before anything is placed. The pack's arithmetic is
+     untouched by it: it centres and pushes right exactly as before, over a different order. */
+  const packing = pack(groups, relations, collapsed, orderBlocks(groups, relations, collapsed));
+  const { visible } = packing;
+  const { positions, centres } = spread(groups, packing);
 
   const blocks = [...groups.members.keys()]
     .filter((anchor) => visible.has(anchor))

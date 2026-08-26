@@ -10,6 +10,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildScene, displayName, displayYears } from './scene.js';
+import { ortho } from './ortho.js';
+import { connectorSegments, type PathPoint } from '../layout/crossings.js';
 import { computeLayout } from '../layout/layout.js';
 import type { Family, GedcomDoc, Individual, Xref } from '../model/types.js';
 
@@ -127,6 +129,28 @@ describe('the scene', () => {
     expect(scene.connectors.filter((line) => line.kind === 'spouse')).toHaveLength(2);
     // The stem plus one path per child, which overdraw along the bar to make it.
     expect(scene.connectors.filter((line) => line.kind === 'descent')).toHaveLength(3);
+  });
+
+  it('routes exactly what the crossing metric measures', () => {
+    // `layout/crossings.ts` restates this module's routing, because the layering rule forbids it
+    // from importing this one. Two copies of a shape drift, and a metric measuring a shape the
+    // renderer stopped drawing would report a tidy chart that nobody sees. So the copies are held
+    // to each other here, where importing both is allowed.
+    const doc = household;
+    const scene = scened(doc);
+    const points = new Map<string, PathPoint[]>();
+    for (const run of connectorSegments(computeLayout(doc))) {
+      const started = points.get(run.id);
+      if (started === undefined) points.set(run.id, [run.from, run.to]);
+      else started.push(run.to);
+    }
+
+    const drawn = new Map(
+      scene.connectors.filter((line) => line.d !== '').map((line) => [line.id, line.d]),
+    );
+    expect([...points.keys()].sort()).toEqual([...drawn.keys()].sort());
+    for (const [id, path] of points)
+      expect({ [id]: ortho(path) }).toEqual({ [id]: drawn.get(id) });
   });
 
   it('puts no NaN in any path it produces', () => {

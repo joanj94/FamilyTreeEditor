@@ -1,5 +1,5 @@
 {
-  "note": "Coordinates computed by the companion pipeline's layout.py for the tree below, kept here so the TypeScript port can be diffed against it. Invented people; no real genealogy data.",
+  "note": "Coordinates computed by this project for the tree below, kept as a regression pin on the layout it has chosen. They began as the companion pipeline’s layout.py output and were re-baselined from this implementation once the layout deliberately diverged from that port. Invented people; no real genealogy data.",
   "tree": {
     "families": {
       "@F001@": {
@@ -92,88 +92,89 @@
   "layout": {
     "positions": {
       "@I001@": [
-        696.5,
+        428,
         0
       ],
       "@I002@": [
-        868.5,
+        600,
         0
       ],
       "@I005@": [
-        193,
-        200
-      ],
-      "@I009@": [
-        0,
-        400
-      ],
-      "@I017@": [
-        172,
-        400
-      ],
-      "@I018@": [
-        86,
-        600
-      ],
-      "@I010@": [
-        386,
-        400
-      ],
-      "@I011@": [
-        642,
-        200
-      ],
-      "@I006@": [
-        814,
-        200
-      ],
-      "@I013@": [
         986,
         200
       ],
+      "@I009@": [
+        793,
+        400
+      ],
+      "@I017@": [
+        965,
+        400
+      ],
+      "@I018@": [
+        879,
+        600
+      ],
+      "@I010@": [
+        1179,
+        400
+      ],
+      "@I011@": [
+        42,
+        200
+      ],
+      "@I006@": [
+        214,
+        200
+      ],
+      "@I013@": [
+        386,
+        200
+      ],
       "@I012@": [
-        600,
+        0,
         400
       ],
       "@I014@": [
-        814,
+        214,
         400
       ],
       "@I015@": [
-        1028,
+        428,
         400
       ],
       "@I007@": [
-        1200,
+        600,
         200
       ],
       "@I016@": [
-        1372,
+        772,
         200
       ],
       "@I003@": [
-        1500,
+        1114,
         0
       ],
       "@I004@": [
-        1672,
+        1286,
         0
       ],
       "@I008@": [
-        1586,
+        1200,
         200
       ]
     },
     "unions": {
       "@F001@": {
-        "x": 857.5,
+        "x": 589,
         "y": 88,
+        "runY": 88,
         "lane": 0,
         "ordinal": 0,
         "barY": 172,
-        "barFrom": 268,
-        "barTo": 1275,
-        "stemX": 857.5,
+        "barFrom": 289,
+        "barTo": 1061,
+        "stemX": 589,
         "stemY": 154,
         "children": [
           "@I005@",
@@ -182,77 +183,83 @@
         ]
       },
       "@F002@": {
-        "x": 1661,
+        "x": 1275,
         "y": 88,
+        "runY": 88,
         "lane": 0,
         "ordinal": 0,
         "barY": 172,
-        "barFrom": 1661,
-        "barTo": 1661,
-        "stemX": 1661,
+        "barFrom": 1275,
+        "barTo": 1275,
+        "stemX": 1275,
         "stemY": 154,
         "children": [
           "@I008@"
         ]
       },
-      "@F003@": {
-        "x": 964.5,
-        "y": 288,
-        "lane": 0,
-        "ordinal": 0,
-        "barY": 372,
-        "barFrom": 75,
-        "barTo": 461,
-        "stemX": 461,
-        "stemY": 354,
-        "children": [
-          "@I009@",
-          "@I010@"
-        ]
-      },
       "@F004@": {
-        "x": 803,
-        "y": 318,
-        "lane": 1,
+        "x": 203,
+        "y": 302,
+        "runY": 288,
+        "lane": 0,
         "ordinal": 1,
         "barY": 372,
-        "barFrom": 675,
-        "barTo": 675,
-        "stemX": 675,
+        "barFrom": 75,
+        "barTo": 75,
+        "stemX": 75,
         "stemY": 354,
         "children": [
           "@I012@"
         ]
       },
       "@F005@": {
-        "x": 1010.5,
-        "y": 348,
-        "lane": 2,
+        "x": 375,
+        "y": 302,
+        "runY": 302,
+        "lane": 1,
         "ordinal": 2,
-        "barY": 382,
-        "barFrom": 889,
-        "barTo": 1103,
-        "stemX": 1010.5,
-        "stemY": 364,
+        "barY": 354,
+        "barFrom": 289,
+        "barTo": 503,
+        "stemX": 375,
+        "stemY": 336,
         "children": [
           "@I014@",
           "@I015@"
         ]
       },
       "@F006@": {
-        "x": 1361,
-        "y": 318,
-        "lane": 1
+        "x": 761,
+        "y": 302,
+        "runY": 288,
+        "lane": 0
+      },
+      "@F003@": {
+        "x": 1168,
+        "y": 302,
+        "runY": 288,
+        "lane": 0,
+        "ordinal": 0,
+        "barY": 372,
+        "barFrom": 868,
+        "barTo": 1254,
+        "stemX": 1168,
+        "stemY": 354,
+        "children": [
+          "@I009@",
+          "@I010@"
+        ]
       },
       "@F007@": {
-        "x": 161,
+        "x": 954,
         "y": 488,
+        "runY": 488,
         "lane": 0,
         "ordinal": 0,
         "barY": 572,
-        "barFrom": 161,
-        "barTo": 161,
-        "stemX": 161,
+        "barFrom": 954,
+        "barTo": 954,
+        "stemX": 954,
         "stemY": 554,
         "children": [
           "@I018@"
@@ -405,7 +412,7 @@
       "blockGap": 64,
       "elbow": 9,
       "gapX": 22,
-      "laneH": 30,
+      "laneH": 14,
       "laneSlop": 6,
       "lanes": 4,
       "minBarBelowDot": 34,

@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { GEOMETRY, computeLayout, type Layout } from './layout.js';
+import { connectorSegments, crossingPairs } from './crossings.js';
 import { childrenOf, spousesOf } from './relations.js';
 import type { Family, GedcomDoc, Individual, Xref } from '../model/types.js';
 
@@ -32,6 +33,7 @@ const TOLERANCE = 0.5;
 interface OracleUnion {
   readonly x: number;
   readonly y: number;
+  readonly runY: number;
   readonly lane: number;
   readonly ordinal?: number;
   readonly barY?: number;
@@ -133,7 +135,7 @@ describe('the port against the oracle', () => {
         continue;
       }
       const differences: Record<string, [unknown, unknown]> = {};
-      const numbers = ['x', 'y', 'barY', 'barFrom', 'barTo', 'stemX', 'stemY'] as const;
+      const numbers = ['x', 'y', 'runY', 'barY', 'barFrom', 'barTo', 'stemX', 'stemY'] as const;
       for (const key of numbers) {
         const mine = here[key];
         const theirs = expected[key];
@@ -245,18 +247,18 @@ function invariants(chart: Layout): void {
       expect(outside).toEqual([]);
     });
 
-    it('runs no spouse connector under an unrelated box, where the couple share a block', () => {
-      // A connector passing under someone else's box reads as joining them, so a couple drawn
-      // side by side must have nothing between them.
+    it('runs no spouse connector under an unrelated box', () => {
+      // A connector passing under someone else's box reads as joining them, so a couple must
+      // have nothing between them.
       //
-      // **The guarantee stops at the block.** Where both partners have parents of their own,
-      // neither joins the other -- each must anchor its own block to hang from its own family --
-      // and the pack is then free to place other blocks between them. This tree does exactly
-      // that with @F003@, and `layout.py` produces the same five crossings from the same input,
-      // so it is inherited from the algorithm rather than introduced by the port. The source
-      // chart happens not to contain the shape, which is why the original suite could assert
-      // this outright. Fixing it means teaching the pack to keep a couple's blocks adjacent,
-      // which is a change to the packing order and not to this test.
+      // **This used to be conditional, and no longer is.** Where both partners have parents of
+      // their own, neither joins the other -- each must anchor its own block to hang from its
+      // own family -- and the pack was then free to place other blocks between them. This tree
+      // does exactly that with @F003@; `layout.py` produced the same crossings from the same
+      // input; and this test recorded the exception rather than asserting the rule. The ordering
+      // pass keeps married blocks adjacent, so the rule now holds outright -- which is what the
+      // original Python suite was able to assert only because the source chart happened not to
+      // contain the shape.
       const crossed: [Xref, Xref][] = [];
       for (const family of chart.unions.keys()) {
         const pair = spousesOf(chart.relations, family);
@@ -274,15 +276,14 @@ function invariants(chart: Layout): void {
         }
       }
 
-      const sharingABlock = crossed.filter(([family]) => {
-        const pair = spousesOf(chart.relations, family);
-        const blocks = new Set(pair.map((spouse) => chart.groups.of.get(spouse)));
-        return blocks.size === 1;
-      });
-      expect(sharingABlock).toEqual([]);
+      expect(crossed).toEqual([]);
+    });
 
-      const separated = new Set(crossed.map(([family]) => family));
-      expect([...separated]).toEqual(['@F003@']);
+    it('crosses no connector over another', () => {
+      // The count the chart was reported for, as a ceiling rather than as a screenshot. Measured
+      // at 7 before the ordering pass, every one of them belonging to @F003@; 0 after. A change
+      // that reintroduces one fails here instead of being noticed months later.
+      expect(crossingPairs(connectorSegments(chart))).toEqual([]);
     });
 
     it('interleaves no two families children on a row', () => {
@@ -334,13 +335,32 @@ function invariants(chart: Layout): void {
       expect(Math.min(...gaps)).toBeGreaterThanOrEqual(GEOMETRY.barLift / 2);
     });
 
+    it('hangs every union dot on a row at the same height', () => {
+      // A generation is a row, so everything belonging to it sits on one line. Dots following
+      // their lane put two families 30px apart vertically, which was reported as incoherent --
+      // and with a fold box under each, read as two generations.
+      const heights = new Map<number, Set<number>>();
+      for (const [family, union] of chart.unions) {
+        const row = Math.max(
+          ...spousesOf(chart.relations, family).map(
+            (spouse) => chart.positions.get(spouse)?.y ?? 0,
+          ),
+        );
+        const seen = heights.get(row) ?? new Set<number>();
+        seen.add(union.y);
+        heights.set(row, seen);
+      }
+      const split = [...heights].filter(([, seen]) => seen.size > 1);
+      expect(split).toEqual([]);
+    });
+
     it('never lets two overlapping unions share a lane', () => {
       const spans = [...chart.unions].map(([family, union]) => {
         const reach = [
           union.x,
           ...spousesOf(chart.relations, family).map((spouse) => chart.centres.get(spouse) ?? 0),
         ];
-        return { family, y: union.y, from: Math.min(...reach), to: Math.max(...reach) };
+        return { family, y: union.runY, from: Math.min(...reach), to: Math.max(...reach) };
       });
       const merged: [Xref, Xref][] = [];
       spans.forEach((left, index) => {
