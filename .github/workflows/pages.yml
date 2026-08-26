@@ -1,0 +1,62 @@
+name: Pages
+
+# Deploys the built bundle to GitHub Pages. Kept separate from CI on purpose: CI runs on every
+# pull request, including ones from forks, and a deploy job in that workflow would either be
+# skipped on most runs or -- worse -- hold write permissions on runs triggered by strangers.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# The least a Pages deploy can be given. `contents: read` to check the code out, `pages: write`
+# to publish, `id-token: write` for the deployment's own attestation. Nothing else.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and a queued one is not cancelled: cancelling would leave the site on
+# whichever build happened to win, which is not necessarily the newest.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The gate runs here as well as in CI. A push to main that skipped review would otherwise
+      # reach the public site without anything having checked it.
+      - name: Verify
+        run: pnpm typecheck && pnpm lint && pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

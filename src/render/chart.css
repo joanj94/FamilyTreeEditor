@@ -108,3 +108,19 @@
   font-size: 12px;
   fill: var(--chart-text-dim, #6f665c);
 }
+
+/* Focus has to be visible, or the keyboard route added for accessibility is only theoretically
+   usable: a node that is focused but looks identical to every other node tells a sighted keyboard
+   user nothing about where they are. `:focus-visible` keeps it off the pointer path. */
+.person:focus-visible .box,
+.union-node:focus-visible .hit,
+.toggle:focus-visible .hit {
+  outline: 2px solid var(--accent, currentColor);
+  outline-offset: 2px;
+}
+
+.person:focus-visible,
+.union-node:focus-visible,
+.toggle:focus-visible {
+  outline: none;
+}

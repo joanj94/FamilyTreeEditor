@@ -223,3 +223,96 @@ describe('importGedcom', () => {
     expect(doc.origin?.encoding).toBe('ANSEL');
   });
 });
+
+/* ------------------------------------------------------------------------------------------- *
+ * Tags that collide with Object.prototype.
+ *
+ * Two separate defences, tested separately because either one could be removed by somebody who
+ * believed the other was doing the work.
+ *
+ * The lexer refuses a tag outside GEDCOM's grammar, so `2 constructor Foo` never becomes a
+ * structure at all. And the mapper reads its name-piece table with `Object.hasOwn`, so even a
+ * structure that arrives by some other route cannot be mistaken for a `GIVN`.
+ *
+ * Without the second, a plain object answered `constructor` from its prototype and the mapper
+ * built a name carrying a key named after a function -- which failed the schema, and since the
+ * editor validates before every command, made every later edit refuse.
+ * ------------------------------------------------------------------------------------------- */
+const fromText = (text: string) => importGedcom(new TextEncoder().encode(text));
+
+describe('tags that share a name with something on Object.prototype', () => {
+  for (const tag of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+    it(`refuses ${tag} at the lexer and says so`, () => {
+      const { doc, issues } = fromText(
+        `${HEAD7}0 @I1@ INDI
+1 NAME GivenA /SurnameB/
+2 ${tag} Foo
+0 TRLR
+`,
+      );
+
+      expect(issues.some((issue) => issue.observed === tag)).toBe(true);
+      // No invented field, and no structure kept under a tag the standard cannot express.
+      expect(Object.keys(doc.individuals[0]?.names?.[0] ?? {})).toEqual(['value']);
+      expect(validateDoc(doc).ok).toBe(true);
+    });
+  }
+
+  it('does not mistake one for a name piece even when it reaches the mapper directly', () => {
+    // Straight to `toDocument`, so the lexer's guard is not the thing under test here.
+    const { doc } = toDocument([
+      {
+        xref: '@I1@',
+        tag: 'INDI',
+        children: [
+          {
+            tag: 'NAME',
+            payload: 'GivenA /SurnameB/',
+            children: [{ tag: 'constructor', payload: 'Foo' }],
+          },
+        ],
+      },
+    ]);
+
+    const name = doc.individuals[0]?.names?.[0];
+    expect(Object.keys(name ?? {}).sort()).toEqual(['extensions', 'value']);
+    expect(name?.extensions).toEqual([{ tag: 'constructor', payload: 'Foo' }]);
+  });
+
+  it('still reads the real name pieces', () => {
+    const { doc } = map(
+      `${HEAD7}0 @I1@ INDI
+1 NAME GivenA /SurnameB/
+2 GIVN GivenA
+2 SURN SurnameB
+0 TRLR
+`,
+    );
+    expect(doc.individuals[0]?.names?.[0]).toMatchObject({
+      given: ['GivenA'],
+      surname: ['SurnameB'],
+    });
+  });
+});
+
+describe('the tag grammar', () => {
+  it('keeps an extension tag, which is what an underscore is for', () => {
+    const { doc, issues } = fromText(`${HEAD7}0 @I1@ INDI
+1 _UID INVENTED-0001
+0 TRLR
+`);
+    expect(issues).toEqual([]);
+    expect(doc.individuals[0]?.extensions).toEqual([{ tag: '_UID', payload: 'INVENTED-0001' }]);
+  });
+
+  it('skips a lower-case tag and carries on with the rest of the file', () => {
+    // One malformed line should cost that line, not the import.
+    const { doc, issues } = fromText(`${HEAD7}0 @I1@ INDI
+1 lowercase x
+1 SEX F
+0 TRLR
+`);
+    expect(issues).toHaveLength(1);
+    expect(doc.individuals[0]?.sex).toBe('F');
+  });
+});

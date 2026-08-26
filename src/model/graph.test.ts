@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ancestorsOf,
   indexDoc,
+  parentFamiliesOf,
   isAncestorOf,
   isVoid,
   membersOf,
@@ -167,5 +168,75 @@ describe('isAncestorOf', () => {
   it('is false for a person unrelated to the line', () => {
     const index = indexDoc(threeGenerations);
     expect(isAncestorOf(index, '@I4@', '@I3@')).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------------------------------- *
+ * Cost.
+ *
+ * `parentFamiliesOf` used to scan every family to answer one person's question, and `audit()`
+ * asks it for every person on every edit -- so the work grew with the square of the file.
+ * Measured before the fix: 6 ms at 500 people, 72 ms at 4,000. That is a keystroke's worth of
+ * checking becoming a visible pause on a file this tool is meant to handle.
+ *
+ * Asserting a ratio rather than a duration, because a wall-clock threshold on a shared CI runner
+ * is a flaky test waiting to happen. Quadratic growth quadruples the time when the input doubles;
+ * linear growth doubles it. The bar is set well clear of both the old behaviour and ordinary
+ * noise.
+ * ------------------------------------------------------------------------------------------- */
+describe('cost as the document grows', () => {
+  /** A forest: every five people form a family of two partners and three children. Invented. */
+  const forest = (people: number): GedcomDoc => {
+    const individuals = [];
+    const families = [];
+    for (let base = 0; base + 5 <= people; base += 5) {
+      const fx = `@F${String(base / 5 + 1)}@`;
+      const p = (n: number) => `@I${String(base + n)}@`;
+      individuals.push(
+        { xref: p(1), familiesAsSpouse: [{ xref: fx }] },
+        { xref: p(2), familiesAsSpouse: [{ xref: fx }] },
+        { xref: p(3), familiesAsChild: [{ xref: fx }] },
+        { xref: p(4), familiesAsChild: [{ xref: fx }] },
+        { xref: p(5), familiesAsChild: [{ xref: fx }] },
+      );
+      families.push({ xref: fx, husband: p(1), wife: p(2), children: [p(3), p(4), p(5)] });
+    }
+    return { header: { gedcomVersion: '7.0' }, individuals, families };
+  };
+
+  /** Walk every person's parent families, which is the shape `audit()` traverses. */
+  const walk = (doc: GedcomDoc): number => {
+    const index = indexDoc(doc);
+    const start = performance.now();
+    for (const individual of doc.individuals) parentFamiliesOf(index, individual.xref);
+    return performance.now() - start;
+  };
+
+  it('grows with the document rather than with its square', () => {
+    const small = forest(2000);
+    const large = forest(4000);
+
+    // Warm both paths so the first measurement is not paying for compilation.
+    walk(small);
+    walk(large);
+
+    const ratio = (walk(large) + 0.01) / (walk(small) + 0.01);
+    expect(ratio).toBeLessThan(2.5);
+  });
+
+  it('answers from the index rather than by scanning the families', () => {
+    const doc = forest(50);
+    const index = indexDoc(doc);
+    expect(index.claimedAsChild.get('@I3@')).toEqual(['@F1@']);
+    expect(index.claimedAsChild.get('@I1@')).toBeUndefined();
+  });
+
+  it('claims a child once even where a family lists them twice', () => {
+    const doc: GedcomDoc = {
+      header: { gedcomVersion: '7.0' },
+      individuals: [{ xref: '@I1@' }],
+      families: [{ xref: '@F1@', children: ['@I1@', '@I1@'] }],
+    };
+    expect(parentFamiliesOf(indexDoc(doc), '@I1@')).toEqual(['@F1@']);
   });
 });

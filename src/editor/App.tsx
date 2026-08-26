@@ -14,47 +14,43 @@
  * Saving reports what the chosen format could not carry. GEDCOM 7 carries everything this editor
  * holds; 5.5.1 does not, and a user choosing the older format is told what it costs them rather
  * than left to find out from the file.
+ *
+ * **Two different things are called saving here, and the difference is the point.** The tree is
+ * autosaved into this browser, so closing the tab does not lose an afternoon's work. That is not
+ * the same as writing it back to the user's `.ged`, which a web page cannot do -- only the user
+ * can, by taking the file the save buttons hand them. So the unload guard asks about the second,
+ * never the first, and the wording everywhere keeps them apart.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { importGedcom, type ImportIssue } from '../gedcom/mapper.js';
-import {
-  exportGedcom,
-  exportJson,
-  type ExportDialect,
-  type ExportNote,
-} from '../gedcom/serialize.js';
+
 import { audit, type AuditFinding } from '../model/audit.js';
 import { Chart } from '../render/Chart.js';
+import { Bar, type SaveFormat } from './Bar.js';
+import { EmptyScreen } from './EmptyScreen.js';
+import { Notices, type Saved } from './Notices.js';
 import { PersonPanel } from './PersonPanel.js';
+import { prepareDownload } from './save.js';
 import { UnionPanel } from './UnionPanel.js';
 import { apply, type Command } from './commands.js';
-import {
-  begin,
-  canRedo,
-  canUndo,
-  redo,
-  redoLabel,
-  undo,
-  undoLabel,
-  type History,
-} from './history.js';
-import type { Xref } from '../model/types.js';
+import { useTreeStore } from './persistence.js';
+import { hasUnwrittenWork, keptSummary } from './unsaved.js';
+import { begin, redo, undo, type History } from './history.js';
+import { newTreeId } from '../storage/repository.js';
+import type { GedcomDoc, Xref } from '../model/types.js';
 
 interface Opened {
+  /** The identifier this tree is stored under, issued when it is first opened. */
+  readonly id: string;
   readonly name: string;
   readonly history: History;
   readonly issues: readonly ImportIssue[];
 }
 
-/** GEDCOM in either version, or the document itself. */
-type SaveFormat = ExportDialect | 'json';
-
-/** What the last save did, and what the format could not take with it. */
-interface Saved {
-  readonly headline: string;
-  readonly notes: readonly ExportNote[];
-}
+/** `2026-08-26T02:30:00.000Z` as something a person reads. */
+const clockOf = (iso: string): string =>
+  new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
 /**
  * Hand the user a file.
@@ -77,15 +73,17 @@ function download(name: string, text: string, type: string): void {
   }, 0);
 }
 
-/** The opened file's name without its extension, so a save keeps the family's name on it. */
-const stemOf = (name: string): string => name.replace(/\.(ged|gedcom|json)$/i, '');
-
 export function App() {
   const [opened, setOpened] = useState<Opened | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
   const [chosen, setChosen] = useState<Xref | null>(null);
+  const recordRef = useRef<HTMLElement | null>(null);
+  /* The exact document last written back to a file. Documents are immutable and structurally
+     shared, so comparing by reference answers "has anything changed since?" precisely -- and an
+     undo back to the state that was exported correctly stops counting as unwritten. */
+  const [exported, setExported] = useState<GedcomDoc | null>(null);
 
   const open = useCallback((file: File) => {
     setFailed(null);
@@ -95,8 +93,16 @@ export function App() {
       .arrayBuffer()
       .then((buffer) => {
         const { doc, issues } = importGedcom(new Uint8Array(buffer), file.name);
-        setOpened({ name: file.name, history: begin(doc, `Opened ${file.name}`), issues });
+        setOpened({
+          id: newTreeId(),
+          name: file.name,
+          history: begin(doc, `Opened ${file.name}`),
+          issues,
+        });
         setChosen(null);
+        /* The document came off disk this instant, so it matches the file the user still has.
+           Leaving this null made the unload guard fire on every session, with zero edits. */
+        setExported(doc);
       })
       .catch((error: unknown) => {
         // Never silently: a file that will not open has to say so, and say why.
@@ -137,29 +143,99 @@ export function App() {
     (format: SaveFormat) => {
       if (opened === null) return;
       const document_ = opened.history.present.doc;
-      const stem = stemOf(opened.name);
-
-      if (format === 'json') {
-        download(`${stem}.json`, exportJson(document_), 'application/json');
-        setSaved({
-          headline: `Saved ${stem}.json. The JSON is the document itself, so it carries everything.`,
-          notes: [],
-        });
-        return;
-      }
-
-      const { text, notes } = exportGedcom(document_, { dialect: format });
-      download(`${stem}.ged`, text, 'text/plain;charset=utf-8');
-      setSaved({
-        headline:
-          notes.length === 0
-            ? `Saved ${stem}.ged as GEDCOM ${format}, with nothing left behind.`
-            : `Saved ${stem}.ged as GEDCOM ${format}. That format could not carry ${String(notes.length)} of them:`,
-        notes,
-      });
+      const { filename, text, mime, headline, notes } = prepareDownload(
+        document_,
+        opened.name,
+        format,
+      );
+      download(filename, text, mime);
+      setExported(document_);
+      setSaved({ headline, notes });
     },
     [opened],
   );
+
+  const doc = opened?.history.present.doc;
+
+  const store = useTreeStore(
+    opened === undefined || opened === null || doc === undefined
+      ? null
+      : { id: opened.id, name: opened.name, doc },
+  );
+
+  /** Open a tree this browser was already holding. */
+  const resume = useCallback(
+    (id: string) => {
+      setFailed(null);
+      setRefused(null);
+      setSaved(null);
+      void store
+        .reopen(id)
+        .then((stored) => {
+          if (stored === undefined) {
+            setFailed('That tree is no longer in this browser.');
+            return;
+          }
+          setOpened({
+            id: stored.id,
+            name: stored.name,
+            history: begin(stored.doc, `Reopened ${stored.name}`),
+            issues: [],
+          });
+          setChosen(null);
+          /* Deliberately not `setExported(stored.doc)`: the autosaved edits really were never
+             written back to the user's file. That is a true statement about the file rather than
+             a danger, so it colours the status line and not the guard -- see `unsaved.ts`. */
+          setExported(null);
+        })
+        .catch((error: unknown) => {
+          setFailed(error instanceof Error ? error.message : String(error));
+        });
+    },
+    [store],
+  );
+
+  const unsaved = { doc, exported, persistent: store.persistent, pending: store.pending };
+  /* Work that exists in neither a file the user holds nor this browser's storage. The reasoning,
+     and why it is not simply "has this been exported", is in `unsaved.ts`. */
+  const unwritten = hasUnwrittenWork(unsaved);
+
+  useEffect(() => {
+    if (!unwritten) return undefined;
+    const onLeave = (event: BeforeUnloadEvent): void => {
+      // `preventDefault` alone is what the specification asks for, and what current browsers act
+      // on. The old `returnValue = ''` incantation is deliberately not used: it writes to the
+      // event, which this project's lint rules forbid, and no supported browser still needs it.
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', onLeave);
+    return () => {
+      window.removeEventListener('beforeunload', onLeave);
+    };
+  }, [unwritten]);
+
+  /* Focus follows the selection into the record panel.
+     Opening a record from the chart used to leave focus on the node, and the panel is rendered
+     after the whole scene -- so reaching the fields you had just opened meant tabbing past every
+     remaining person, union and fold control. Measured in a browser on an eighteen-person file:
+     thirty-one stops. On a real chart it is several hundred, which is not a keyboard route at all.
+     Escape closes the panel and puts focus back on the node it came from, so the chart is not a
+     place a keyboard user can fall into and have to climb out of. */
+  useEffect(() => {
+    if (chosen === null) return undefined;
+    recordRef.current?.focus();
+
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      const cameFrom = document.querySelector<SVGGElement>(`[data-id="${chosen}"]`);
+      setChosen(null);
+      cameFrom?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [chosen]);
 
   /* Ctrl+Z and Ctrl+Shift+Z, because an editor without them is not an editor. Bound on the window
      so they work wherever the focus is, except inside a field, where the browser's own undo is
@@ -180,122 +256,49 @@ export function App() {
     };
   }, [step]);
 
-  const doc = opened?.history.present.doc;
   const findings: readonly AuditFinding[] = doc === undefined ? [] : audit(doc);
   const warnings = findings.filter((finding) => finding.severity === 'warning');
 
+  const keptLine =
+    keptSummary({ ...unsaved, savedAt: store.savedAt }) +
+    (store.savedAt !== null && !store.pending ? ` at ${clockOf(store.savedAt)}` : '');
+
   return (
     <main className="shell">
-      <header className="bar">
-        <h1>FamilyTreeEditor</h1>
-        <label className="open">
-          <input
-            type="file"
-            accept=".ged,.gedcom,text/plain"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file !== undefined) open(file);
-            }}
-          />
-          <span>Open a .ged file</span>
-        </label>
+      <Bar
+        onOpen={open}
+        opened={
+          opened === null
+            ? null
+            : { name: opened.name, history: opened.history, issues: opened.issues.length }
+        }
+        people={doc?.individuals.length ?? 0}
+        families={doc?.families.length ?? 0}
+        warnings={warnings.length}
+        kept={keptLine}
+        notWrittenBack={doc !== exported}
+        onStep={step}
+        onSave={save}
+      />
 
-        {opened === null ? null : (
-          <>
-            <span className="steps">
-              <button
-                type="button"
-                disabled={!canUndo(opened.history)}
-                title={undoLabel(opened.history)}
-                onClick={() => {
-                  step('undo');
-                }}
-              >
-                Undo
-              </button>
-              <button
-                type="button"
-                disabled={!canRedo(opened.history)}
-                title={redoLabel(opened.history)}
-                onClick={() => {
-                  step('redo');
-                }}
-              >
-                Redo
-              </button>
-            </span>
-            <span className="saves">
-              <button
-                type="button"
-                title="GEDCOM 7 carries everything this editor holds"
-                onClick={() => {
-                  save('7.0');
-                }}
-              >
-                Save GEDCOM 7
-              </button>
-              <button
-                type="button"
-                title="For a program that cannot read GEDCOM 7. Anything the older version cannot say is reported"
-                onClick={() => {
-                  save('5.5.1');
-                }}
-              >
-                Save 5.5.1
-              </button>
-              <button
-                type="button"
-                title="The document as JSON, in the shape the schema describes"
-                onClick={() => {
-                  save('json');
-                }}
-              >
-                Save JSON
-              </button>
-            </span>
-            <p className="loaded">
-              {opened.name} — {doc?.individuals.length ?? 0} people, {doc?.families.length ?? 0}{' '}
-              families
-              {opened.issues.length > 0 ? `, ${String(opened.issues.length)} import notes` : ''}
-              {warnings.length > 0 ? `, ${String(warnings.length)} warnings` : ''}
-            </p>
-          </>
-        )}
-      </header>
-
-      {failed === null ? null : <p className="failed">That file could not be read: {failed}</p>}
-      {refused === null ? null : <p className="refused">{refused}</p>}
-      {saved === null ? null : (
-        <div className="saved">
-          <p>{saved.headline}</p>
-          {saved.notes.length === 0 ? null : (
-            <ul>
-              {saved.notes.map((note) => (
-                <li key={`${note.xref ?? ''}${note.message}${note.observed}`}>
-                  {note.message} <em>{note.observed}</em>
-                  {note.xref === undefined ? '' : ` (${note.xref})`}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <Notices failed={failed} storeFailure={store.failure} refused={refused} saved={saved} />
 
       {opened === null || doc === undefined ? (
-        <section className="empty">
-          <p className="tagline">
-            Open a GEDCOM file to see the family drawn. 5.5.1 and 7 are both read, in the
-            encoding the file declares.
-          </p>
-          <p className="privacy">Your file is parsed in this browser and never uploaded.</p>
-        </section>
+        <EmptyScreen stored={store.stored} onResume={resume} onForget={store.forget} />
       ) : (
         <section className="work">
           <div className="stage">
             <Chart doc={doc} onSelectPerson={setChosen} onSelectUnion={setChosen} />
           </div>
           {chosen === null ? null : (
-            <aside className="record">
+            <aside
+              className="record"
+              ref={recordRef}
+              /* Focusable programmatically but not a tab stop of its own: the panel is where
+                 focus is put, and Tab from there goes to its first field. */
+              tabIndex={-1}
+              aria-label="Record"
+            >
               {doc.families.some((family) => family.xref === chosen) ? (
                 <UnionPanel doc={doc} xref={chosen} run={run} onSelect={setChosen} />
               ) : (

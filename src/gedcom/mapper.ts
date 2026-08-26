@@ -195,22 +195,40 @@ function mapPlace(node: Structure): Place {
   );
 }
 
+/** The `NAME` substructures that are personal name pieces, and the field each one fills. */
+const NAME_PIECE_FIELDS: Readonly<Record<string, string>> = {
+  NPFX: 'prefix',
+  GIVN: 'given',
+  NICK: 'nickname',
+  SPFX: 'surnamePrefix',
+  SURN: 'surname',
+  NSFX: 'suffix',
+};
+
+/**
+ * Which field a name-piece tag fills, or `undefined` where the tag is not one.
+ *
+ * `Object.hasOwn` rather than a bare lookup, and the difference is not theoretical: a plain object
+ * answers `constructor`, `toString` and `__proto__` from its prototype, so a file containing
+ * `2 constructor Foo` under a `NAME` produced a name carrying a key named after a function. That
+ * name then failed the schema, which made every later edit refuse -- and the payload was neither
+ * modelled nor kept in `extensions`, so it broke the one rule this mapper exists to enforce.
+ *
+ * Tags in the standard are upper case, which is why no fixture found it. Tags in real files are
+ * whatever the program that wrote them emitted.
+ */
+function nameFieldFor(tag: string): string | undefined {
+  return Object.hasOwn(NAME_PIECE_FIELDS, tag) ? NAME_PIECE_FIELDS[tag] : undefined;
+}
+
 function mapName(node: Structure, report: (issue: ImportIssue) => void): GenName {
   const pieces: Record<string, string[]> = {};
-  const tagToField: Readonly<Record<string, string>> = {
-    NPFX: 'prefix',
-    GIVN: 'given',
-    NICK: 'nickname',
-    SPFX: 'surnamePrefix',
-    SURN: 'surname',
-    NSFX: 'suffix',
-  };
 
   let type: NameType | undefined;
   let typePhrase: string | undefined;
 
   const extras = route(node, (child) => {
-    const field = tagToField[child.tag];
+    const field = nameFieldFor(child.tag);
     if (field !== undefined) {
       // Each piece may repeat, which is how a name carrying two surnames is expressed.
       (pieces[field] ??= []).push(payloadOf(child) ?? '');

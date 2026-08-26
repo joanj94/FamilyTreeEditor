@@ -9,6 +9,11 @@ Free, open source, and entirely client-side.
 > **Your file is parsed in your browser and never uploaded.** There is no server, no account and
 > no telemetry. Genealogy files describe living people, so this is a design constraint rather
 > than a promise made after the fact.
+>
+> Trees you open are remembered on your own device, in the browser's own database, so that closing
+> the tab does not lose an afternoon's work. That copy never leaves the machine either, and
+> **Forget** removes it. In a private window, or with site data switched off, the editor still
+> works and simply says it is not keeping anything.
 
 ## What it does
 
@@ -27,6 +32,10 @@ Free, open source, and entirely client-side.
 - **Edits persons and unions** through a command stack with undo and redo. Every edit produces a
   new document rather than mutating the old one, and the result stays schema-valid and audit-clean
   or the command does not apply.
+- **Remembers what you were working on.** Trees are autosaved into this browser and listed on the
+  opening screen. That is not the same as writing your `.ged` back — a web page cannot do that, only
+  you can, by taking the file the save buttons hand you — so the two are named differently
+  everywhere, and closing the tab with changes you have not written out asks first.
 - **Writes GEDCOM 7 by default and 5.5.1 on request**, alongside the JSON form of the document.
   `import(export(import(f)))` equals `import(f)` for every fixture, for an edited document, and for
   a few hundred generated ones: a round trip is not allowed to lose anything anyone said about the
@@ -125,6 +134,11 @@ a fixture look plausible. Genealogy data describes living people, and a fixture 
 remains in git history after it is deleted, so this is enforced rather than encouraged:
 `tests/private/` and `*.private.ged` are git-ignored, and that is where local work against real
 files belongs.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The one rule worth repeating here: **no real genealogy
+data enters this repository**, down to a single record borrowed to make a fixture look plausible.
 
 ## License
 

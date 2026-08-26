@@ -226,6 +226,61 @@ body {
   opacity: 0.8;
 }
 
+/* Two different things are called saving, and the line that says which is which has to be legible
+   without being loud. It sits under the file line and reads as status, not as a warning. */
+.kept {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.kept-trees {
+  margin-top: 2.5rem;
+}
+
+.kept-trees h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.kept-note {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.kept-trees ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kept-trees li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+.kept-detail {
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.forget {
+  padding: 0.15rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
 /* A refused edit is not an error in the file; it is the tool declining to break the tree. It
    reads as advice rather than as a failure. */
 .refused {
@@ -290,4 +345,15 @@ button.link {
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+/* The panel is focused when it opens, and a focus ring around the whole aside reads as an error
+   rather than as "you are here". The heading carries the cue instead. */
+.record:focus {
+  outline: none;
+}
+
+.record:focus-visible h2 {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }

@@ -139,6 +139,38 @@ interface Reach {
 }
 
 /**
+ * Give two dots on the same row room to read as two.
+ *
+ * A dot sits at the midpoint of its own spouses. Two unions whose couples are centred alike --
+ * one wide, one narrow -- therefore land within a few pixels of each other, and the lane mechanism
+ * then separates them by one lane's height, which is a stack rather than a gap. Measured on the
+ * test chart: 10.5px apart, and it read as a single joint wearing two fold boxes.
+ *
+ * A single left-to-right sweep, pushing rightward only. That is what keeps it stable: a pass that
+ * pushed both ways would move a dot into the one before it and need another pass to undo it.
+ *
+ * **A dot is never pushed past the spouse it belongs to.** That rule predates this function -- an
+ * earlier version let a dot drift off its own couple and the connector stopped meaning anything --
+ * so the shift is clamped to `to`, and a union that cannot be given room keeps its place. Nothing
+ * is lost by that: the lanes are still there, and they are what separates the ones that cannot
+ * move.
+ */
+function separate(unions: readonly Reach[]): readonly Reach[] {
+  const byX = [...unions].sort((left, right) => {
+    if (left.x !== right.x) return left.x - right.x;
+    return left.family < right.family ? -1 : left.family > right.family ? 1 : 0;
+  });
+
+  let previous = Number.NEGATIVE_INFINITY;
+  return byX.map((union) => {
+    const wanted = Math.max(union.x, previous + GEOMETRY.minUnionGap);
+    const x = Math.min(wanted, union.to);
+    previous = x;
+    return { ...union, x };
+  });
+}
+
+/**
  * Put each union in the gap below its spouses, and route its descent.
  *
  * A union in `collapsed` keeps its dot and loses its bar: folding has to close the tree up, not
@@ -168,7 +200,8 @@ export function placeUnions(
   const placed = new Map<Xref, UnionPlacement>();
   for (const [row, unions] of ranked) {
     const laneEnd: number[] = [];
-    const ordered = [...unions].sort((left, right) => {
+    const spaced = separate(unions);
+    const ordered = [...spaced].sort((left, right) => {
       if (left.from !== right.from) return left.from - right.from;
       return left.family < right.family ? -1 : left.family > right.family ? 1 : 0;
     });

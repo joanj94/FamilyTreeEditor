@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A file that will not open
+    url: https://github.com/joanj94/FamilyTreeEditor/blob/main/CONTRIBUTING.md#reporting-a-bug-in-someones-file
+    about: Please read this before attaching anything - do not upload a real genealogy file.

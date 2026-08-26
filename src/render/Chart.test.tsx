@@ -78,6 +78,12 @@ function click(target: Element | null | undefined): void {
   });
 }
 
+function press(target: Element | null | undefined, key: string): void {
+  act(() => {
+    target?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  });
+}
+
 const boxes = () => [...container.querySelectorAll('.person')];
 const fold = (family: string) =>
   container.querySelector<SVGGElement>(`.toggle[data-fam="${family}"]`);
@@ -181,5 +187,68 @@ describe('choosing', () => {
     mount(<Chart doc={doc} onSelectUnion={chose} />);
     click(container.querySelector('.union-node'));
     expect(chose).toHaveBeenCalledWith('@F1@');
+  });
+});
+
+/* ------------------------------------------------------------------------------------------- *
+ * Reaching the chart without a mouse.
+ *
+ * The record panel opens only from a node, so a chart that cannot be focused or activated by
+ * keyboard makes the whole editor mouse-only -- every person unreadable and unreachable, which is
+ * the application's entire purpose. That was true until these tests existed, which is the point
+ * of writing them at the level of "can somebody actually get there" rather than testing the
+ * attributes in isolation.
+ * ------------------------------------------------------------------------------------------- */
+describe('reaching the chart without a mouse', () => {
+  it('exposes the scene rather than hiding it behind an image role', () => {
+    // `role="img"` tells assistive technology the element has no interior worth visiting.
+    mount(<Chart doc={doc} />);
+    const stage = container.querySelector('svg');
+    expect(stage?.getAttribute('role')).toBe('group');
+    expect(stage?.getAttribute('aria-label')).toContain('4 people');
+  });
+
+  it('puts every person in the tab order, named', () => {
+    mount(<Chart doc={doc} />);
+    for (const box of boxes()) {
+      expect(box.getAttribute('tabindex')).toBe('0');
+      expect(box.getAttribute('role')).toBe('button');
+      expect(box.getAttribute('aria-label')).toBeTruthy();
+    }
+  });
+
+  it('selects a person with Enter and with Space', () => {
+    for (const key of ['Enter', ' ']) {
+      const chose = vi.fn();
+      mount(<Chart doc={doc} onSelectPerson={chose} />);
+      press(boxes()[0], key);
+      expect(chose).toHaveBeenCalledWith('@I1@');
+    }
+  });
+
+  it('ignores keys that are not an activation', () => {
+    const chose = vi.fn();
+    mount(<Chart doc={doc} onSelectPerson={chose} />);
+    press(boxes()[0], 'a');
+    press(boxes()[0], 'Tab');
+    expect(chose).not.toHaveBeenCalled();
+  });
+
+  it('selects a union with the keyboard too', () => {
+    const chose = vi.fn();
+    mount(<Chart doc={doc} onSelectUnion={chose} />);
+    press(container.querySelector('.union-node'), 'Enter');
+    expect(chose).toHaveBeenCalledWith('@F1@');
+  });
+
+  it('folds a branch from the keyboard, and says whether it is open', () => {
+    mount(<Chart doc={doc} />);
+    const toggle = fold('@F1@');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle?.getAttribute('aria-label')).toContain('Collapse');
+
+    press(toggle, 'Enter');
+    expect(fold('@F1@')?.getAttribute('aria-expanded')).toBe('false');
+    expect(fold('@F1@')?.getAttribute('aria-label')).toContain('Expand');
   });
 });

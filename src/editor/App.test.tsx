@@ -204,3 +204,81 @@ describe('saving', () => {
     expect(container.querySelector('.saved')).toBeNull();
   });
 });
+
+/* ------------------------------------------------------------------------------------------- *
+ * Being told what happened.
+ *
+ * Every one of these messages appears in response to something the user just did and then sits
+ * there silently. For anybody using a screen reader that is the same experience as an export that
+ * lost data quietly: the words are on the page, and nothing says them.
+ * ------------------------------------------------------------------------------------------- */
+describe('announcements', () => {
+  it('announces what an export could not carry', async () => {
+    await open('invented.ged', SOURCE);
+    press('Save 5.5.1');
+
+    const region = container.querySelector('.saved');
+    expect(region?.getAttribute('role')).toBe('status');
+    expect(region?.textContent).toContain('SEX value X');
+  });
+
+  it('announces a save that lost nothing, so silence never means success', async () => {
+    await open('invented.ged', SOURCE);
+    press('Save GEDCOM 7');
+    expect(container.querySelector('.saved')?.getAttribute('role')).toBe('status');
+  });
+});
+
+/* ------------------------------------------------------------------------------------------- *
+ * Where focus goes.
+ *
+ * Found in a real browser, not here: opening a record from the chart left focus on the node, and
+ * the panel is rendered after the entire scene -- so reaching the fields you had just opened meant
+ * tabbing past every remaining person, union and fold control. Thirty-one stops on an
+ * eighteen-person file; several hundred on a real chart, which is not a keyboard route at all.
+ * ------------------------------------------------------------------------------------------- */
+describe('focus follows the selection', () => {
+  it('moves into the record panel when one opens', async () => {
+    await open('invented.ged', SOURCE);
+    choose('@I1@');
+
+    const panel = container.querySelector('.record');
+    expect(panel).not.toBeNull();
+    expect(document.activeElement).toBe(panel);
+  });
+
+  it('gives the panel a name, since focus lands on the container', async () => {
+    await open('invented.ged', SOURCE);
+    choose('@I1@');
+    expect(container.querySelector('.record')?.getAttribute('aria-label')).toBe('Record');
+  });
+
+  it('keeps the panel out of the tab order itself', async () => {
+    // -1, not 0: focus is *put* there, and Tab from it should reach the first field rather than
+    // stopping on the container a second time.
+    await open('invented.ged', SOURCE);
+    choose('@I1@');
+    expect(container.querySelector('.record')?.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('returns focus to the node it came from when Escape closes the panel', async () => {
+    await open('invented.ged', SOURCE);
+    choose('@I1@');
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    expect(container.querySelector('.record')).toBeNull();
+    expect(document.activeElement).toBe(container.querySelector('[data-id="@I1@"]'));
+  });
+
+  it('ignores Escape when no record is open', async () => {
+    await open('invented.ged', SOURCE);
+    expect(() => {
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+    }).not.toThrow();
+  });
+});

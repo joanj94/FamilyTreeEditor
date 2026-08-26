@@ -239,7 +239,12 @@ export function decodeGedcom(source: Uint8Array): DecodeResult {
     };
   }
 
-  const encoding = KNOWN[declared.toUpperCase()];
+  const named = declared.toUpperCase();
+  /* `Object.hasOwn`, for the same reason as `nameFieldFor` in the mapper: a bare lookup on a plain
+     object answers `constructor` and its neighbours from the prototype. Upper-casing happens to
+     put every one of those out of reach here, so this is not a live fault -- but relying on that
+     coincidence means the next person to drop the `toUpperCase` introduces one silently. */
+  const encoding = Object.hasOwn(KNOWN, named) ? KNOWN[named] : undefined;
   if (encoding === undefined) {
     // Refusing to open the file helps nobody, so it is read as UTF-8 and the user is told what
     // the file claimed and what was done instead.

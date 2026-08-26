@@ -1,0 +1,33 @@
+name: Feature request
+description: Something the editor should do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Media, sources, notes, places and merge tooling are deliberately outside this editor's
+        scope. They survive a round trip untouched, which is the intended treatment rather than a
+        gap — so a request to *edit* them is a request to change the scope, and worth saying so
+        explicitly.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The genealogy problem, not the feature. What are you trying to record or find out?
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: How you do it today
+      description: In this editor, or in another program.
+
+  - type: textarea
+    id: standard
+    attributes:
+      label: What GEDCOM calls it
+      description: >
+        If the thing you want has a tag in the standard, naming it saves a lot of guesswork —
+        this editor's model mirrors GEDCOM 7 rather than inventing its own vocabulary.

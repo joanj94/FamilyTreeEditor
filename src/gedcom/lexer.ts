@@ -47,6 +47,22 @@ const POINTER = /^@[A-Z0-9_]+@$/;
 const LEVEL = /^\d+$/;
 
 /**
+ * The standard's Tag production: an upper-case letter or underscore, then upper-case letters,
+ * digits and underscores.
+ *
+ * Enforced here because the document model mirrors GEDCOM 7, and GEDCOM 7 has no way to express a
+ * tag outside this grammar. A line carrying one used to be kept, at which point the document it
+ * produced could not satisfy its own schema -- and since the editor validates before every command,
+ * one malformed line in an imported file made every subsequent edit refuse, with a message about a
+ * property the user could not see.
+ *
+ * Skipping it loses the line, which is a real cost and the reason it is reported with the text that
+ * was actually there. The alternative is worse: keeping it would mean writing a line back out that
+ * no conforming reader can parse, spreading one file's malformation into every export.
+ */
+const TAG = /^[A-Z_][A-Z0-9_]*$/;
+
+/**
  * Split on every line terminator in circulation. GEDCOM predates the settling of this question,
  * and files travel between systems: CRLF from Windows writers, LF from Unix ones, and bare CR
  * from old Mac ones.
@@ -127,6 +143,17 @@ function readLine(raw: string, lineNumber: number): GedcomLine | LexIssue {
 
   if (tag === '') {
     return { line: lineNumber, message: 'Expected a tag, found none.', observed: raw };
+  }
+
+  if (!TAG.test(tag)) {
+    return {
+      line: lineNumber,
+      message:
+        `Expected a tag of upper-case letters, digits and underscores, found ${JSON.stringify(tag)}. ` +
+        `The line was skipped: GEDCOM has no way to express this tag, so keeping it would produce ` +
+        `a file no reader could parse.`,
+      observed: tag,
+    };
   }
 
   if (afterTag === -1) {

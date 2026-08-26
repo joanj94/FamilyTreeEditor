@@ -21,6 +21,7 @@ export interface Geometry {
   readonly laneH: number;
   readonly lanes: number;
   readonly laneSlop: number;
+  readonly minUnionGap: number;
   readonly barLift: number;
   readonly stemDogleg: number;
   readonly minBarBelowDot: number;
@@ -44,11 +45,26 @@ export const GEOMETRY: Geometry = {
    * Union connectors are stacked in lanes. Two unions sharing a row and standing side by side
    * drew one unbroken stroke, which read as a single union joining eight people who were in four
    * separate couples; giving each its own horizontal is what breaks the join.
+   *
+   * Raised from the ported 14 to clear the fold box. A control is 26 tall and hangs 6 below its
+   * own dot, so at 14 the box belonging to one union ended level with the dot of the next and the
+   * two read as a single knot of hardware rather than as two families. Separating them is worth
+   * more than the vertical space it costs: this drawing is read, not packed.
    */
-  laneH: 14,
+  laneH: 30,
   lanes: 4,
   /** How close two connectors may come before they count as touching. */
   laneSlop: 6,
+  /**
+   * The least horizontal distance between two union dots on the same row.
+   *
+   * A dot sits at the midpoint of its own spouses, so two unions whose couples happen to be
+   * centred alike -- one wide, one narrow -- put their dots within a few pixels of each other and
+   * are then told apart only by their lane. Measured on the test chart: two dots 10.5px apart,
+   * which reads as one joint with two fold boxes stacked under it. A dot is nudged along its own
+   * row to keep this much clear, and never past the spouse it belongs to.
+   */
+  minUnionGap: 46,
   /** How far the sibling bar is lifted off the row of the children it feeds. */
   barLift: 28,
   /** The short horizontal the stem jogs across before it drops to the bar. */

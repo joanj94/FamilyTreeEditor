@@ -1,0 +1,52 @@
+name: Bug report
+description: Something the editor got wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Please do not attach your GEDCOM file.** Genealogy files describe living people, and a
+        file attached to a public issue stays public. A handful of records with invented names
+        that reproduce the same failure is more useful anyway, because it can go straight into
+        the test suite.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did the editor do, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: A file that shows it
+      description: >
+        The smallest GEDCOM that reproduces it, with every name invented. Paste it as text.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: Which GEDCOM version the file declares
+      description: The `2 VERS` line in its header, if you know it. `5.5.1` and `7.0` behave differently.
+
+  - type: input
+    id: encoding
+    attributes:
+      label: Which encoding the file declares
+      description: The `1 CHAR` line, if there is one. ANSEL files are the ones most likely to go wrong.
+
+  - type: input
+    id: source-program
+    attributes:
+      label: Which program produced the file
+      description: The `1 SOUR` line in its header — GDS, Gramps, Ancestry, and so on.
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+    validations:
+      required: true

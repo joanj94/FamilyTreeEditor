@@ -18,6 +18,7 @@
  * they stay hittable when the chart is zoomed out.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import { computeLayout } from '../layout/layout.js';
 import { buildScene } from './scene.js';
@@ -191,11 +192,29 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
     });
   };
 
+  /**
+   * Enter and Space activate a node, which is what they do on a button.
+   *
+   * `preventDefault` stops Space from scrolling the page out from under the selection, and
+   * `stopPropagation` keeps the activation from also reaching the stage as a pan gesture.
+   */
+  const onActivate =
+    (act: () => void) =>
+    (event: ReactKeyboardEvent<SVGGElement>): void => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      event.stopPropagation();
+      act();
+    };
+
   return (
     <svg
       ref={stageRef}
       className="chart-stage"
-      role="img"
+      /* `group`, not `img`. An image has no interior as far as assistive technology is concerned,
+         so every person inside it was unreachable -- and since the record panel opens only from a
+         node, that made the editor's whole purpose mouse-only. */
+      role="group"
       aria-label={`Family tree: ${String(scene.persons.length)} people`}
     >
       <g ref={sceneRef}>
@@ -211,9 +230,15 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
               key={person.id}
               className={`person${person.sex === undefined ? '' : ` sex-${person.sex}`}`}
               data-id={person.id}
+              role="button"
+              tabIndex={0}
+              aria-label={person.years === '' ? person.name : `${person.name}, ${person.years}`}
               onClick={(event) => {
                 if (chose(event)) onSelectPerson?.(person.id);
               }}
+              onKeyDown={onActivate(() => {
+                onSelectPerson?.(person.id);
+              })}
             >
               {/* On the group, not on the text: the whole box is what a reader points at, and a
                   title inside the text would also become part of its content. */}
@@ -242,9 +267,15 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
               <g
                 className="union-node"
                 data-id={union.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Union ${union.id}`}
                 onClick={(event) => {
                   if (chose(event)) onSelectUnion?.(union.id);
                 }}
+                onKeyDown={onActivate(() => {
+                  onSelectUnion?.(union.id);
+                })}
               >
                 <circle className="hit" cx={union.x} cy={union.y} r={11} />
                 <circle className="union" cx={union.x} cy={union.y} r={5} />
@@ -257,9 +288,24 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
                   data-fam={union.id}
                   data-cx={union.x}
                   data-cy={union.y}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={!union.collapsed}
+                  aria-label={
+                    union.collapsed
+                      ? `Expand the branch below ${union.id}`
+                      : `Collapse the branch below ${union.id}`
+                  }
                   onClick={(event) => {
                     toggleFold(union.id, event);
                   }}
+                  onKeyDown={onActivate(() => {
+                    setCollapsed((current) => {
+                      const next = new Set(current);
+                      if (!next.delete(union.id)) next.add(union.id);
+                      return next;
+                    });
+                  })}
                 >
                   <rect
                     className="hit"
