@@ -234,6 +234,43 @@ body {
   font-size: 0.8rem;
 }
 
+/* The way in for somebody with no file. It sits between the tagline and the kept trees, given
+   the same weight as the file picker in the bar rather than the weight of a footnote -- a user who
+   cannot use the picker needs to find this without looking for it. */
+.fresh {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 15%, transparent);
+  border-radius: 0.5rem;
+}
+
+.fresh h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.fresh-note {
+  margin: 0 0 0.9rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.start-fresh {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.start-fresh:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .kept-trees {
   margin-top: 2.5rem;
 }

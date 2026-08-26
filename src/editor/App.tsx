@@ -6,10 +6,10 @@
  * command, checks the result against the schema and against `audit()`, and records it only if both
  * pass. A refused edit changes nothing and says why, in the bar, in words a genealogist can act on.
  *
- * The file is read with `File.arrayBuffer()` and parsed in this tab, and written back the same
- * way -- a blob and a synthetic click. There is no upload, no fetch, and nowhere for one to be
- * added by accident: `gedcom/` and `model/` cannot import anything from the UI, and nothing in
- * this project talks to a network at all.
+ * The file is read with `File.arrayBuffer()` and parsed in this tab, and written back through
+ * the browser's own save dialog -- see `handOver.ts`. There is no upload, no fetch, and nowhere
+ * for one to be added by accident: `gedcom/` and `model/` cannot import anything from the UI, and
+ * nothing in this project talks to a network at all.
  *
  * Saving reports what the chosen format could not carry. GEDCOM 7 carries everything this editor
  * holds; 5.5.1 does not, and a user choosing the older format is told what it costs them rather
@@ -31,8 +31,10 @@ import { Bar, type SaveFormat } from './Bar.js';
 import { EmptyScreen } from './EmptyScreen.js';
 import { Notices, type Saved } from './Notices.js';
 import { PersonPanel } from './PersonPanel.js';
+import { handOver } from './handOver.js';
 import { prepareDownload } from './save.js';
 import { UnionPanel } from './UnionPanel.js';
+import { NEW_TREE_LABEL, NEW_TREE_NAME, blankTree } from './blank.js';
 import { apply, type Command } from './commands.js';
 import { useTreeStore } from './persistence.js';
 import { hasUnwrittenWork, keptSummary } from './unsaved.js';
@@ -52,32 +54,12 @@ interface Opened {
 const clockOf = (iso: string): string =>
   new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
-/**
- * Hand the user a file.
- *
- * A blob and a synthetic click is the only way a page with no server behind it can give somebody
- * a file. The bytes are built in this tab and go straight to their disk. The URL is released on a
- * timeout rather than immediately, because revoking it in the same tick can cancel the download
- * it was created for.
- */
-function download(name: string, text: string, type: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = name;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 0);
-}
-
 export function App() {
   const [opened, setOpened] = useState<Opened | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
+  const [saveFailure, setSaveFailure] = useState<string | null>(null);
   const [chosen, setChosen] = useState<Xref | null>(null);
   const recordRef = useRef<HTMLElement | null>(null);
   /* The exact document last written back to a file. Documents are immutable and structurally
@@ -89,6 +71,7 @@ export function App() {
     setFailed(null);
     setRefused(null);
     setSaved(null);
+    setSaveFailure(null);
     file
       .arrayBuffer()
       .then((buffer) => {
@@ -139,18 +122,40 @@ export function App() {
     );
   }, []);
 
+  /**
+   * Write the document out, wherever the user says.
+   *
+   * Nothing is claimed until the file exists. A save dialog can be closed without choosing
+   * anything, and treating that as a save would mark the document written-back and disarm the
+   * unload guard over a file that was never created -- so a cancellation is simply silent, and a
+   * failed write says so rather than reporting a success.
+   *
+   * The document written is captured here rather than read back afterwards: the user can go on
+   * editing while the dialog is open, and what was saved is what was on screen when they asked.
+   */
   const save = useCallback(
     (format: SaveFormat) => {
       if (opened === null) return;
       const document_ = opened.history.present.doc;
-      const { filename, text, mime, headline, notes } = prepareDownload(
-        document_,
-        opened.name,
-        format,
-      );
-      download(filename, text, mime);
-      setExported(document_);
-      setSaved({ headline, notes });
+      const file = prepareDownload(document_, opened.name, format);
+      setSaveFailure(null);
+      setSaved(null);
+
+      void handOver(file)
+        .then((result) => {
+          if (result.outcome === 'cancelled') return;
+          if (result.outcome === 'failed') {
+            setSaveFailure(result.problem);
+            return;
+          }
+          setExported(document_);
+          setSaved({ headline: file.headline(result.filename), notes: file.notes });
+        })
+        .catch((error: unknown) => {
+          // `handOver` answers rather than throws, so this is the unforeseen kind. It still
+          // reaches the screen: a save that quietly did nothing is the worst outcome here.
+          setSaveFailure(error instanceof Error ? error.message : String(error));
+        });
     },
     [opened],
   );
@@ -163,12 +168,39 @@ export function App() {
       : { id: opened.id, name: opened.name, doc },
   );
 
+  /**
+   * Begin with no file at all.
+   *
+   * For the user who has nothing to open. The new person is selected straight away, because an
+   * unnamed box on an otherwise empty chart is not an obvious invitation to click, and the panel
+   * is where the tree is actually built.
+   *
+   * `exported` stays null, which is the truth: this document has never been in a file. Where this
+   * browser is storing nothing, that makes closing the tab a real loss and the guard says so.
+   */
+  const startFresh = useCallback(() => {
+    setFailed(null);
+    setRefused(null);
+    setSaved(null);
+    setSaveFailure(null);
+    const { doc: fresh, first } = blankTree();
+    setOpened({
+      id: newTreeId(),
+      name: NEW_TREE_NAME,
+      history: begin(fresh, NEW_TREE_LABEL),
+      issues: [],
+    });
+    setChosen(first);
+    setExported(null);
+  }, []);
+
   /** Open a tree this browser was already holding. */
   const resume = useCallback(
     (id: string) => {
       setFailed(null);
       setRefused(null);
       setSaved(null);
+      setSaveFailure(null);
       void store
         .reopen(id)
         .then((stored) => {
@@ -281,10 +313,21 @@ export function App() {
         onSave={save}
       />
 
-      <Notices failed={failed} storeFailure={store.failure} refused={refused} saved={saved} />
+      <Notices
+        failed={failed}
+        storeFailure={store.failure}
+        saveFailure={saveFailure}
+        refused={refused}
+        saved={saved}
+      />
 
       {opened === null || doc === undefined ? (
-        <EmptyScreen stored={store.stored} onResume={resume} onForget={store.forget} />
+        <EmptyScreen
+          stored={store.stored}
+          onResume={resume}
+          onForget={store.forget}
+          onStartFresh={startFresh}
+        />
       ) : (
         <section className="work">
           <div className="stage">

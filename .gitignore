@@ -136,6 +136,9 @@ opencode.json
 .mcp.json
 mcp.json
 
+# Playwright MCP (browser driving) -- screenshots, console logs and whatever a page was fed
+.playwright-mcp/
+
 # Generic agent scratch space
 .ai/
 .agent/

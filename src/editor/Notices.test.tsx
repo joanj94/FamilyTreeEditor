@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The four notices, and whether anything says them out loud.
+ * The five notices, and whether anything says them out loud.
  *
  * A failure interrupts -- what the user asked for did not happen -- so it is an `alert`. The rest
  * are results of what they just did and can wait for a pause in speech, so they are a `status`.
@@ -25,7 +25,13 @@ const show = (props: Parameters<typeof Notices>[0]): void => {
   });
 };
 
-const quiet = { failed: null, storeFailure: null, refused: null, saved: null };
+const quiet = {
+  failed: null,
+  storeFailure: null,
+  saveFailure: null,
+  refused: null,
+  saved: null,
+};
 
 beforeEach(() => {
   container = document.createElement('div');
@@ -53,6 +59,15 @@ describe('failures interrupt', () => {
     const region = container.querySelector('.failed');
     expect(region?.getAttribute('role')).toBe('alert');
     expect(region?.textContent).toContain('the header is unreadable');
+  });
+
+  it('announces a file that could not be written', () => {
+    // The user picked a folder and a name. If this is silent they walk away believing the file
+    // is there.
+    show({ ...quiet, saveFailure: 'the disk is full' });
+    const region = container.querySelector('.failed');
+    expect(region?.getAttribute('role')).toBe('alert');
+    expect(region?.textContent).toContain('the disk is full');
   });
 
   it('announces a tree that could not be kept', () => {

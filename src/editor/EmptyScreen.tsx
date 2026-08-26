@@ -1,8 +1,15 @@
 /**
  * What there is to see before a file is open.
  *
- * Two jobs: say what this tool does, and offer back the trees this browser is already holding.
- * The second is the reason the wording here is careful. A list of trees "in this browser" invites
+ * Three jobs: say what this tool does, offer back the trees this browser is already holding, and
+ * let somebody who has no file begin anyway.
+ *
+ * That last one is easy to leave out and expensive to leave out. Everything else here assumes a
+ * `.ged` already exists, and a person sitting down to record what they know has nothing to open --
+ * for them the whole screen is a door with no handle. So the offer is made in as many words,
+ * beside the file picker rather than buried under it.
+ *
+ * The kept-trees list is the reason the wording here is careful. A list of trees "in this browser" invites
  * the reading that they have been saved somewhere, so the note under it says plainly that nothing
  * has been sent anywhere and nothing has been written back to the files they came from -- which
  * are the two things a user would otherwise assume in opposite directions.
@@ -19,9 +26,11 @@ export interface EmptyScreenProps {
   readonly stored: readonly TreeSummary[];
   readonly onResume: (id: string) => void;
   readonly onForget: (id: string) => void;
+  /** Begin with an empty tree, for a user who has no file to open. */
+  readonly onStartFresh: () => void;
 }
 
-export function EmptyScreen({ stored, onResume, onForget }: EmptyScreenProps) {
+export function EmptyScreen({ stored, onResume, onForget, onStartFresh }: EmptyScreenProps) {
   return (
     <section className="empty">
       <p className="tagline">
@@ -29,6 +38,18 @@ export function EmptyScreen({ stored, onResume, onForget }: EmptyScreenProps) {
         the file declares.
       </p>
       <p className="privacy">Your file is parsed in this browser and never uploaded.</p>
+
+      <section className="fresh">
+        <h2>No file to open?</h2>
+        <p className="fresh-note">
+          Start an empty tree and type what you know. It begins with one person; partners,
+          parents and children are added from there. When you are ready, the save buttons hand
+          you a real GEDCOM file you can take anywhere.
+        </p>
+        <button type="button" className="start-fresh" onClick={onStartFresh}>
+          Start a new tree
+        </button>
+      </section>
 
       {stored.length === 0 ? null : (
         <section className="kept-trees">
