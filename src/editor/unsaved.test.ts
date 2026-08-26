@@ -11,6 +11,12 @@ import { describe, expect, it } from 'vitest';
 
 import { hasUnwrittenWork, keptSummary } from './unsaved.js';
 import type { GedcomDoc } from '../model/types.js';
+import { makeTranslate } from '../i18n/catalog.js';
+import { EN } from '../i18n/keys.js';
+
+/* These suites assert English prose. The catalog is asked for it explicitly rather than
+   through a provider, so a change of default language never silently rewrites them. */
+const say = makeTranslate('en', EN);
 
 /** Two distinct documents. Only their identity matters -- the comparison is by reference. */
 const opened: GedcomDoc = { header: { gedcomVersion: '7.0' }, individuals: [], families: [] };
@@ -87,37 +93,43 @@ describe('undo', () => {
 describe('what the status line says', () => {
   it('admits when nothing is being kept at all', () => {
     expect(
-      keptSummary({
-        doc: opened,
-        exported: null,
-        persistent: false,
-        pending: true,
-        savedAt: null,
-      }),
+      say(
+        keptSummary({
+          doc: opened,
+          exported: null,
+          persistent: false,
+          pending: true,
+          savedAt: null,
+        }),
+      ),
     ).toContain('lasts only as long as the tab');
   });
 
   it('says a write is in flight while one is', () => {
     expect(
-      keptSummary({
-        doc: edited,
-        exported: null,
-        persistent: true,
-        pending: true,
-        savedAt: '2026-08-26T02:30:00.000Z',
-      }),
+      say(
+        keptSummary({
+          doc: edited,
+          exported: null,
+          persistent: true,
+          pending: true,
+          savedAt: '2026-08-26T02:30:00.000Z',
+        }),
+      ),
     ).toContain('Keeping');
   });
 
   it('says the tree is kept once it is', () => {
     expect(
-      keptSummary({
-        doc: edited,
-        exported: null,
-        persistent: true,
-        pending: false,
-        savedAt: '2026-08-26T02:30:00.000Z',
-      }),
+      say(
+        keptSummary({
+          doc: edited,
+          exported: null,
+          persistent: true,
+          pending: false,
+          savedAt: '2026-08-26T02:30:00.000Z',
+        }),
+      ),
     ).toBe('Kept in this browser');
   });
 });

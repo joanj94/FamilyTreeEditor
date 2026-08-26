@@ -32,6 +32,7 @@ import { addChild, apply, editPerson } from '../src/editor/commands.js';
 import { begin } from '../src/editor/history.js';
 import { audit } from '../src/model/audit.js';
 import { validateDoc } from '../src/model/validate.js';
+import type { MessageRef } from '../src/i18n/keys.js';
 import type {
   GedcomDoc,
   Individual,
@@ -66,8 +67,8 @@ function content(doc: GedcomDoc): unknown {
 interface Trip {
   readonly after: GedcomDoc;
   readonly text: string;
-  readonly notes: readonly { readonly message: string }[];
-  readonly issues: readonly { readonly message: string }[];
+  readonly notes: readonly { readonly message: MessageRef }[];
+  readonly issues: readonly { readonly message: MessageRef }[];
 }
 
 /** Export a document and read the result back. */

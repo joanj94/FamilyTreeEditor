@@ -12,13 +12,21 @@
  * `present` is always a document that passed both gates. Nothing invalid is ever committed here,
  * which is why undo cannot walk back into a broken state: no broken state was ever recorded.
  */
+import { ref, type MessageRef } from '../i18n/keys.js';
 import type { GedcomDoc } from '../model/types.js';
 
 /** One state a user can return to, and what to call it when offering. */
 export interface Step {
   readonly doc: GedcomDoc;
-  /** What produced this state, phrased for a menu: "Rename GivenA". */
-  readonly label: string;
+  /**
+   * What produced this state, phrased for a menu: "Rename GivenA".
+   *
+   * **Named, not written.** A stack of sentences is a stack frozen in the language it was made
+   * in: switch to Catalan after ten edits and the first nine still offer to undo in English.
+   * Keeping the reference means the label is rendered when it is shown, so the whole history
+   * changes language with the rest of the screen.
+   */
+  readonly label: MessageRef;
 }
 
 export interface History {
@@ -31,7 +39,7 @@ export interface History {
 export const DEPTH = 100;
 
 /** A history holding one document and nothing to undo. */
-export function begin(doc: GedcomDoc, label = 'Opened'): History {
+export function begin(doc: GedcomDoc, label: MessageRef = ref('command.begin')): History {
   return { past: [], present: { doc, label }, future: [] };
 }
 
@@ -41,7 +49,7 @@ export function begin(doc: GedcomDoc, label = 'Opened'): History {
  * The redo list is cleared, because an edit made after an undo is a different branch of history
  * and keeping the old one would let redo replace work the user has since done.
  */
-export function commit(history: History, doc: GedcomDoc, label: string): History {
+export function commit(history: History, doc: GedcomDoc, label: MessageRef): History {
   const past = [...history.past, history.present].slice(-DEPTH);
   return { past, present: { doc, label }, future: [] };
 }
@@ -73,11 +81,11 @@ export function redo(history: History): History {
 }
 
 /** What undo would undo, for a menu or a button's title. */
-export function undoLabel(history: History): string | undefined {
+export function undoLabel(history: History): MessageRef | undefined {
   return canUndo(history) ? history.present.label : undefined;
 }
 
 /** What redo would redo. */
-export function redoLabel(history: History): string | undefined {
+export function redoLabel(history: History): MessageRef | undefined {
   return history.future[0]?.label;
 }

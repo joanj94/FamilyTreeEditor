@@ -22,6 +22,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import { computeLayout } from '../layout/layout.js';
 import { buildScene, displayXref } from './scene.js';
+import { useT } from '../i18n/context.js';
 import {
   beginDrag,
   controlScale,
@@ -50,9 +51,15 @@ const OPENS_AT: Viewport = { scale: 0.75, tx: 40, ty: 90 };
 
 export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<Xref>>(() => new Set<Xref>());
+  const t = useT();
 
   const layout = useMemo(() => computeLayout(doc, { collapsed }), [doc, collapsed]);
-  const scene = useMemo(() => buildScene(doc, layout, collapsed), [doc, layout, collapsed]);
+  /* `t` is a dependency because the spoken caption of every box is built from it, so a change of
+     language rebuilds the scene rather than leaving the old language on the labels. */
+  const scene = useMemo(
+    () => buildScene(doc, layout, t, collapsed),
+    [doc, layout, t, collapsed],
+  );
 
   const stageRef = useRef<SVGSVGElement | null>(null);
   const sceneRef = useRef<SVGGElement | null>(null);
@@ -208,7 +215,9 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
          so every person inside it was unreachable -- and since the record panel opens only from a
          node, that made the editor's whole purpose mouse-only. */
       role="group"
-      aria-label={`Family tree: ${String(scene.persons.length)} people`}
+      aria-label={t('chart.stage', {
+        people: t('bar.people', { count: scene.persons.length }),
+      })}
     >
       <g ref={sceneRef}>
         <g className="links">
@@ -266,8 +275,11 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
                 tabIndex={0}
                 aria-label={
                   union.ordinal > 0
-                    ? `Union ${displayXref(union.id)}, marriage ${String(union.ordinal)}`
-                    : `Union ${displayXref(union.id)}`
+                    ? t('chart.unionMarriage', {
+                        xref: displayXref(union.id),
+                        n: union.ordinal,
+                      })
+                    : t('chart.union', { xref: displayXref(union.id) })
                 }
                 onClick={(event) => {
                   if (chose(event)) onSelectUnion?.(union.id);
@@ -305,8 +317,8 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
                   aria-expanded={!union.collapsed}
                   aria-label={
                     union.collapsed
-                      ? `Expand the branch below ${displayXref(union.id)}`
-                      : `Collapse the branch below ${displayXref(union.id)}`
+                      ? t('chart.expand', { xref: displayXref(union.id) })
+                      : t('chart.collapse', { xref: displayXref(union.id) })
                   }
                   onClick={(event) => {
                     toggleFold(union.id, event);
@@ -348,8 +360,8 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
                   ) : null}
                   <title>
                     {union.collapsed
-                      ? `Show ${String(union.hiding)} hidden`
-                      : 'Fold this branch away'}
+                      ? t('chart.showHidden', { count: union.hiding })
+                      : t('chart.fold')}
                   </title>
                 </g>
               ) : null}

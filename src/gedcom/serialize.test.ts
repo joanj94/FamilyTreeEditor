@@ -15,6 +15,12 @@ import { importGedcom } from './mapper.js';
 import { exportGedcom, exportJson, toRecords } from './serialize.js';
 import { validateDoc } from '../model/validate.js';
 import type { GedcomDoc } from '../model/types.js';
+import { makeTranslate } from '../i18n/catalog.js';
+import { EN } from '../i18n/keys.js';
+
+/* These suites assert English prose. The catalog is asked for it explicitly rather than
+   through a provider, so a change of default language never silently rewrites them. */
+const say = makeTranslate('en', EN);
 
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 
@@ -28,7 +34,7 @@ const written = (source: GedcomDoc, dialect: '7.0' | '5.5.1' = '7.0'): readonly 
   lines(exportGedcom(source, { dialect }).text);
 
 const notesOf = (source: GedcomDoc, dialect: '7.0' | '5.5.1' = '7.0'): readonly string[] =>
-  exportGedcom(source, { dialect }).notes.map((note) => note.message);
+  exportGedcom(source, { dialect }).notes.map((note) => say(note.message));
 
 /** Import text and export it again, which is the shape most of these tests want. */
 const through = (text: string, dialect: '7.0' | '5.5.1') =>
@@ -101,7 +107,7 @@ describe('the charset declaration', () => {
   it('is dropped for GEDCOM 7, which removed the tag', () => {
     const result = through(declaring('UTF-8'), '7.0');
     expect(lines(result.text).some((line) => line.startsWith('1 CHAR'))).toBe(false);
-    expect(result.notes.map((note) => note.message)).toContain(
+    expect(result.notes.map((note) => say(note.message))).toContain(
       'GEDCOM 7 removed HEAD.CHAR; the declaration was dropped and the file is UTF-8.',
     );
   });
@@ -115,7 +121,7 @@ describe('the charset declaration', () => {
 
   it('is left in peace when it already tells the truth', () => {
     const notes = through(declaring('UTF-8'), '5.5.1').notes;
-    expect(notes.some((note) => note.message.includes('CHAR'))).toBe(false);
+    expect(notes.some((note) => say(note.message).includes('CHAR'))).toBe(false);
   });
 
   it('carries an ANSEL file out as UTF-8 with its accents intact', () => {

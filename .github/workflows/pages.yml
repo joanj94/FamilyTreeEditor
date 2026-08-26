@@ -45,7 +45,14 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # `enablement` creates the Pages site if the repository has not got one yet. Without it
+      # the first deploy of a fresh clone fails with `Get Pages site failed ... Not Found`,
+      # because the action only reads the site and does not create it. The alternative is a
+      # one-time click in Settings -> Pages -> Source: GitHub Actions, which is a setting
+      # nobody remembers and which no file in the repository records.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v4
         with:

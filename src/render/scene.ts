@@ -14,6 +14,7 @@ import { widthOf } from '../layout/widths.js';
 import { childrenOf, spousesOf } from '../layout/relations.js';
 import { ortho } from './ortho.js';
 import { ordinal } from '../layout/pack.js';
+import type { Translate } from '../i18n/keys.js';
 import { displayCaption, displayMarks, displayName, displayXref } from '../model/labels.js';
 import type { GedcomDoc, Sex, Xref } from '../model/types.js';
 
@@ -162,10 +163,21 @@ function boundsOf(persons: readonly PersonBox[], unions: readonly UnionDot[]): B
   return { minX, minY, width: Math.max(...xs) - minX, height: Math.max(...ys) - minY };
 }
 
-/** Turn a laid-out document into the list of things to draw. */
+/**
+ * Turn a laid-out document into the list of things to draw.
+ *
+ * `t` is here for one field: `caption`, which is the spoken form of a box and therefore the only
+ * part of a scene that has a language. Everything else -- names, years, signs, coordinates -- reads
+ * the same in every locale, which is why the translator is passed rather than the whole scene
+ * being rebuilt per language.
+ *
+ * It goes third because `collapsed` has a default, and a required parameter cannot follow an
+ * optional one.
+ */
 export function buildScene(
   doc: GedcomDoc,
   layout: Layout,
+  t: Translate,
   collapsed: ReadonlySet<Xref> = new Set(),
 ): Scene {
   const byXref = new Map(doc.individuals.map((individual) => [individual.xref, individual]));
@@ -185,7 +197,7 @@ export function buildScene(
       name,
       label: fitText(name, width - 2 * GEOMETRY.nodePadX, GEOMETRY.nameSize),
       marks: individual === undefined ? '' : displayMarks(individual),
-      caption: individual === undefined ? name : displayCaption(individual),
+      caption: individual === undefined ? name : displayCaption(individual, t),
       ...(individual?.sex === undefined ? {} : { sex: individual.sex }),
     };
   });

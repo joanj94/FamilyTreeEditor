@@ -16,6 +16,7 @@
  * from "written back to your file", and the shell's unload guard is about the second. Saying
  * "saved" without that distinction would be the most consequential lie this tool could tell.
  */
+import { ref, type MessageRef } from '../i18n/keys.js';
 import { useCallback, useEffect, useState } from 'react';
 
 import { openTreeRepository } from '../storage/indexeddb.js';
@@ -50,7 +51,7 @@ export interface TreeStore {
    */
   readonly pending: boolean;
   /** Why the last write failed, in words addressed to the user. `null` when nothing has failed. */
-  readonly failure: string | null;
+  readonly failure: MessageRef | null;
   /** Fetch a stored tree in full, so the shell can open it. */
   readonly reopen: (id: string) => Promise<StoredTree | undefined>;
   /** Forget a stored tree. */
@@ -72,7 +73,7 @@ export function useTreeStore(tree: OpenTree | null): TreeStore {
   >(null);
   const [stored, setStored] = useState<readonly TreeSummary[]>([]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<MessageRef | null>(null);
   /* The exact document last written. Compared by reference, which is exact because the model is
      immutable and structurally shared. */
   const [savedDoc, setSavedDoc] = useState<GedcomDoc | null>(null);
@@ -119,8 +120,7 @@ export function useTreeStore(tree: OpenTree | null): TreeStore {
         .catch((error: unknown) => {
           // Never silently. A failed autosave that says nothing leaves somebody believing their
           // work is safe when it is not, which is the worst state this editor could put them in.
-          if (live)
-            setFailure(`This tree could not be stored in your browser: ${problem(error)}`);
+          if (live) setFailure(ref('store.notKept', { detail: problem(error) }));
         });
     }, AUTOSAVE_DELAY_MS);
 
@@ -145,7 +145,7 @@ export function useTreeStore(tree: OpenTree | null): TreeStore {
           setStored(await repository.list());
         })
         .catch((error: unknown) => {
-          setFailure(`That tree could not be removed: ${problem(error)}`);
+          setFailure(ref('store.notRemoved', { detail: problem(error) }));
         });
     },
     [repository],

@@ -16,6 +16,7 @@
  * `smith-1890.ged` sends them looking for a file that does not exist.
  */
 import { exportGedcom, exportJson, type ExportNote } from '../gedcom/serialize.js';
+import { ref, type MessageRef } from '../i18n/keys.js';
 import type { GedcomDoc } from '../model/types.js';
 import type { SaveFormat } from './Bar.js';
 
@@ -24,12 +25,19 @@ export interface Download {
   readonly filename: string;
   readonly text: string;
   readonly mime: string;
-  /** What the save dialog calls this kind of file. */
-  readonly kind: string;
+  /**
+   * What the save dialog calls this kind of file.
+   *
+   * Named rather than written because it is read by the user in the operating system's own
+   * dialog, which is the last place an application should suddenly revert to English. `handOver`
+   * still takes a plain string: rendering happens at the boundary, so the file-writing code needs
+   * to know nothing about languages.
+   */
+  readonly kind: MessageRef;
   /** Extensions the dialog accepts, dot included. The first is the one a bare name gets. */
   readonly extensions: readonly string[];
   /** What to tell the user, given the name the file really went to disk under. */
-  readonly headline: (savedAs: string) => string;
+  readonly headline: (savedAs: string) => MessageRef;
   readonly notes: readonly ExportNote[];
 }
 
@@ -53,10 +61,9 @@ export function prepareDownload(doc: GedcomDoc, name: string, format: SaveFormat
       filename: `${stem}.json`,
       text: exportJson(doc),
       mime: 'application/json',
-      kind: 'Family tree as JSON',
+      kind: ref('save.jsonKind'),
       extensions: ['.json'],
-      headline: (savedAs) =>
-        `Saved ${savedAs}. The JSON is the document itself, so it carries everything.`,
+      headline: (savedAs) => ref('save.jsonHeadline', { savedAs }),
       notes: [],
     };
   }
@@ -66,12 +73,12 @@ export function prepareDownload(doc: GedcomDoc, name: string, format: SaveFormat
     filename: `${stem}.ged`,
     text,
     mime: 'text/plain;charset=utf-8',
-    kind: `GEDCOM ${format}`,
+    kind: ref('save.gedcomKind', { format }),
     extensions: [...GEDCOM_EXTENSIONS],
     headline: (savedAs) =>
       notes.length === 0
-        ? `Saved ${savedAs} as GEDCOM ${format}, with nothing left behind.`
-        : `Saved ${savedAs} as GEDCOM ${format}. That format could not carry ${String(notes.length)} of them:`,
+        ? ref('save.gedcomClean', { savedAs, format })
+        : ref('save.gedcomNotes', { savedAs, format, count: notes.length }),
     notes,
   };
 }

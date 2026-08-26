@@ -25,6 +25,7 @@
  * states that are the same object are the same document -- which also means undo back to a state
  * that was exported or stored correctly stops counting as unwritten.
  */
+import { ref, type MessageRef } from '../i18n/keys.js';
 import type { GedcomDoc } from '../model/types.js';
 
 export interface UnwrittenInput {
@@ -58,11 +59,13 @@ export function hasUnwrittenWork({
  * never doing each other's work.
  */
 export function keptSummary(
-  input: UnwrittenInput & { readonly savedAt: string | null },
-): string {
-  if (!input.persistent) {
-    return 'This browser is not storing anything, so this tree lasts only as long as the tab.';
-  }
-  if (input.savedAt === null || input.pending) return 'Keeping this tree in your browser…';
-  return 'Kept in this browser';
+  input: UnwrittenInput & { readonly savedAt: string | null; readonly clock?: string },
+): MessageRef {
+  if (!input.persistent) return ref('kept.notStoring');
+  if (input.savedAt === null || input.pending) return ref('kept.keeping');
+  /* The time is only said once there is one to say: a tree still being written has no moment to
+     report, and "Kept at --:--" would be a worse answer than not mentioning it. */
+  return input.clock === undefined
+    ? ref('kept.kept')
+    : ref('kept.keptAt', { clock: input.clock });
 }

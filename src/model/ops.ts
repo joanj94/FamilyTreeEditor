@@ -23,6 +23,14 @@
  * `familiesAsChild` or `familiesAsSpouse`, because those have operations that keep the other side
  * in step. The type says so, so it is not a convention anyone has to hold in mind.
  */
+import { makeTranslate } from '../i18n/catalog.js';
+import {
+  EN,
+  ref as messageRef,
+  type MessageKey,
+  type MessageParams,
+  type MessageRef,
+} from '../i18n/keys.js';
 import { indexDoc, isAncestorOf, isVoid, partnersOf } from './graph.js';
 import { nextFamilyXref, nextIndividualXref } from './xref.js';
 import type {
@@ -33,6 +41,10 @@ import type {
   Individual,
   Xref,
 } from './types.js';
+
+/* What `Error.message` is written in. Fixed to English rather than following the user, because a
+   stack trace and a test failure are read by whoever maintains this, wherever they are. */
+const inEnglish = makeTranslate('en', EN);
 
 export type OperationErrorCode =
   /** The document contains no record with that identifier. */
@@ -46,14 +58,27 @@ export type OperationErrorCode =
   /** The edit is contradictory in some other way. */
   | 'INVALID_ARGUMENT';
 
-/** A refused edit. The document the caller holds is unchanged. */
+/**
+ * A refused edit. The document the caller holds is unchanged.
+ *
+ * **It carries the refusal twice, on purpose.** `message` is English and is what a stack trace, a
+ * console and a test failure show -- an `Error` with no readable message is a bad `Error`. `ref` is
+ * the same refusal addressed to the user, rendered in whatever language they are reading, and is
+ * what the editor puts on screen. Neither substitutes for the other: one is for whoever is
+ * debugging this, the other for whoever is doing genealogy.
+ */
 export class OperationError extends Error {
   readonly code: OperationErrorCode;
 
-  constructor(code: OperationErrorCode, message: string) {
-    super(message);
+  /** The refusal as a message the UI can render in the current language. */
+  readonly ref: MessageRef;
+
+  constructor(code: OperationErrorCode, key: MessageKey, params?: MessageParams) {
+    const named = messageRef(key, params);
+    super(inEnglish(named));
     this.name = 'OperationError';
     this.code = code;
+    this.ref = named;
   }
 }
 
@@ -92,7 +117,7 @@ export interface AddResult {
 function requireIndividual(doc: GedcomDoc, xref: Xref): Individual {
   const found = doc.individuals.find((individual) => individual.xref === xref);
   if (found === undefined) {
-    throw new OperationError('UNKNOWN_RECORD', `This document contains no person ${xref}.`);
+    throw new OperationError('UNKNOWN_RECORD', 'ops.noPerson', { xref });
   }
   return found;
 }
@@ -100,7 +125,7 @@ function requireIndividual(doc: GedcomDoc, xref: Xref): Individual {
 function requireFamily(doc: GedcomDoc, xref: Xref): Family {
   const found = doc.families.find((family) => family.xref === xref);
   if (found === undefined) {
-    throw new OperationError('UNKNOWN_RECORD', `This document contains no family ${xref}.`);
+    throw new OperationError('UNKNOWN_RECORD', 'ops.noFamily', { xref });
   }
   return found;
 }
@@ -181,16 +206,13 @@ function assertNoCycle(doc: GedcomDoc, parents: readonly Xref[], child: Xref): v
   const index = indexDoc(doc);
   for (const parent of parents) {
     if (parent === child) {
-      throw new OperationError(
-        'WOULD_CREATE_CYCLE',
-        `${child} cannot be both a partner in a family and a child of it.`,
-      );
+      throw new OperationError('WOULD_CREATE_CYCLE', 'ops.partnerAndChild', { xref: child });
     }
     if (isAncestorOf(index, child, parent)) {
-      throw new OperationError(
-        'WOULD_CREATE_CYCLE',
-        `This would make ${child} their own ancestor: they already stand above ${parent}.`,
-      );
+      throw new OperationError('WOULD_CREATE_CYCLE', 'ops.wouldBeOwnAncestor', {
+        xref: child,
+        parent,
+      });
     }
   }
 }
@@ -269,10 +291,10 @@ export function setPartner(
   if (individualXref !== null) {
     requireIndividual(doc, individualXref);
     if (otherSlot === individualXref) {
-      throw new OperationError(
-        'INVALID_ARGUMENT',
-        `${individualXref} already holds the other partner slot in ${familyXref}.`,
-      );
+      throw new OperationError('INVALID_ARGUMENT', 'ops.partnerSlotTaken', {
+        xref: individualXref,
+        family: familyXref,
+      });
     }
     /* The new partner becomes a parent of everyone the family already lists as a child. */
     for (const child of family.children ?? []) {
@@ -331,10 +353,10 @@ export function linkChild(
   const children = family.children ?? [];
 
   if (children.includes(childXref)) {
-    throw new OperationError(
-      'DUPLICATE_LINK',
-      `${childXref} is already a child of ${familyXref}.`,
-    );
+    throw new OperationError('DUPLICATE_LINK', 'ops.alreadyChild', {
+      xref: childXref,
+      family: familyXref,
+    });
   }
   assertNoCycle(doc, partnersOf(family), childXref);
 
@@ -365,7 +387,10 @@ export function unlinkChild(doc: GedcomDoc, familyXref: Xref, childXref: Xref): 
   );
 
   if (!children.includes(childXref) && !linkedFromChild) {
-    throw new OperationError('NOT_LINKED', `${childXref} is not a child of ${familyXref}.`);
+    throw new OperationError('NOT_LINKED', 'ops.notChild', {
+      xref: childXref,
+      family: familyXref,
+    });
   }
 
   const nextChild = withLinks(

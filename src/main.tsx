@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './editor/App.js';
+import { LanguageProvider } from './i18n/LanguageProvider.js';
 import './editor/app.css';
 
 const container = document.getElementById('root');
@@ -13,6 +14,10 @@ if (container === null) {
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    {/* The provider is what makes the language changeable. Components render correct English
+        without it -- see `i18n/context.ts` -- which is why every suite can mount one on its own. */}
+    <LanguageProvider>
+      <App />
+    </LanguageProvider>
   </StrictMode>,
 );

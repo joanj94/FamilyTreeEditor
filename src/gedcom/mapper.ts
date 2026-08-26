@@ -48,9 +48,18 @@ import type {
 import { decodeGedcom } from './encoding.js';
 import { parseDateValue } from './dates.js';
 import { parseGedcom, type ParsedRecord } from './parse.js';
+import { ref, type MessageRef } from '../i18n/keys.js';
 
 export interface ImportIssue {
-  readonly message: string;
+  /**
+   * What was wrong, named rather than written.
+   *
+   * The framing is translated; the innermost text of a lexer or decoder complaint is not. Those
+   * describe malformed bytes at a byte offset and are addressed to whoever is repairing a broken
+   * file, so they travel through `import.raw` and `import.atLine` as data rather than being
+   * catalogued line by line.
+   */
+  readonly message: MessageRef;
   readonly observed: string;
   /** The record the problem was found in, when it can be traced to one. */
   readonly xref?: string;
@@ -171,7 +180,7 @@ function parseRestriction(
   for (const value of values) {
     if (!RESTRICTIONS.has(value)) {
       report({
-        message: 'Unknown restriction value; ignored.',
+        message: ref('import.unknownRestriction'),
         observed: value,
         ...(xref === undefined ? {} : { xref }),
       });
@@ -243,7 +252,7 @@ function mapName(node: Structure, report: (issue: ImportIssue) => void): GenName
       }
       // 5.5.1 left NAME.TYPE unconstrained, so a value outside the 7 set is expected rather than
       // exceptional. Keeping the structure loses nothing; forcing it to OTHER would lose wording.
-      report({ message: 'Unknown name type; kept verbatim.', observed: value });
+      report({ message: ref('import.unknownNameType'), observed: value });
       return false;
     }
     return false;
@@ -503,7 +512,7 @@ function mapIndividual(record: ParsedRecord, report: (issue: ImportIssue) => voi
         // Keeping the line costs nothing, and means a value this tool cannot interpret is still
         // the user's to correct rather than something it silently deleted.
         report({
-          message: 'Unknown sex value; kept verbatim.',
+          message: ref('import.unknownSex'),
           observed: value,
           ...(record.xref === undefined ? {} : { xref: record.xref }),
         });
@@ -654,7 +663,7 @@ function detectDialect(
 
   const looksOld = (header.extensions ?? []).some((child) => child.tag === 'CHAR');
   report({
-    message: 'Header declares no GEDCOM version; the dialect was inferred.',
+    message: ref('import.noVersion'),
     observed: declared === '' ? '(absent)' : declared,
   });
   return { dialect: looksOld ? '5.5.1' : '7.0', dialectInferred: true };
@@ -688,7 +697,7 @@ export function toDocument(
       // Without an identifier the record cannot be referred to, and the schema cannot hold it.
       // Saying so is better than keeping it somewhere it will not be found again.
       report({
-        message: 'Record has no cross-reference identifier and cannot be kept; dropped.',
+        message: ref('import.noXref'),
         observed: record.tag,
       });
       continue;
@@ -728,9 +737,12 @@ export function importGedcom(source: Uint8Array, fileName?: string): ImportResul
   });
 
   const issues: ImportIssue[] = [
-    ...decoded.issues.map((issue) => ({ message: issue.message, observed: issue.observed })),
+    ...decoded.issues.map((issue) => ({
+      message: ref('import.raw', { detail: issue.message }),
+      observed: issue.observed,
+    })),
     ...parsed.issues.map((issue) => ({
-      message: `Line ${issue.line}: ${issue.message}`,
+      message: ref('import.atLine', { line: issue.line, detail: issue.message }),
       observed: issue.observed,
     })),
     ...mapped.issues,

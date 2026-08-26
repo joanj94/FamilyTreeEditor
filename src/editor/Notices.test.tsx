@@ -13,6 +13,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { Notices } from './Notices.js';
+import { ref } from '../i18n/keys.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -55,7 +56,10 @@ describe('nothing to report', () => {
 
 describe('failures interrupt', () => {
   it('announces a file that could not be read', () => {
-    show({ ...quiet, failed: 'the header is unreadable' });
+    show({
+      ...quiet,
+      failed: ref('notices.readFailed', { detail: 'the header is unreadable' }),
+    });
     const region = container.querySelector('.failed');
     expect(region?.getAttribute('role')).toBe('alert');
     expect(region?.textContent).toContain('the header is unreadable');
@@ -64,7 +68,7 @@ describe('failures interrupt', () => {
   it('announces a file that could not be written', () => {
     // The user picked a folder and a name. If this is silent they walk away believing the file
     // is there.
-    show({ ...quiet, saveFailure: 'the disk is full' });
+    show({ ...quiet, saveFailure: ref('notices.writeFailed', { detail: 'the disk is full' }) });
     const region = container.querySelector('.failed');
     expect(region?.getAttribute('role')).toBe('alert');
     expect(region?.textContent).toContain('the disk is full');
@@ -72,29 +76,48 @@ describe('failures interrupt', () => {
 
   it('announces a tree that could not be kept', () => {
     // The user believes their work is safe. If this one is silent, they go on believing it.
-    show({ ...quiet, storeFailure: 'the storage quota is full' });
+    show({
+      ...quiet,
+      storeFailure: ref('store.notKept', { detail: 'the storage quota is full' }),
+    });
     expect(container.querySelector('.failed')?.getAttribute('role')).toBe('alert');
   });
 });
 
 describe('results wait their turn', () => {
   it('announces a refused edit', () => {
-    show({ ...quiet, refused: 'That would make GivenA their own ancestor.' });
+    show({
+      ...quiet,
+      refused: { say: ref('ops.wouldBeOwnAncestor', { xref: 'I1', parent: 'I2' }) },
+    });
     expect(container.querySelector('.refused')?.getAttribute('role')).toBe('status');
+  });
+
+  it('renders a refusal in its three parts, so none of them is frozen in one language', () => {
+    show({
+      ...quiet,
+      refused: {
+        label: ref('command.addChild'),
+        say: ref('command.refusedBroken'),
+        cause: ref('audit.descentCycle', { xref: 'I1' }),
+      },
+    });
+    const said = container.querySelector('.refused')?.textContent ?? '';
+    expect(said).toContain('Add a child');
+    expect(said).toContain('would break the tree');
+    expect(said).toContain('their own ancestor');
   });
 
   it('announces an export and lists what it could not carry', () => {
     show({
       ...quiet,
       saved: {
-        headline: 'Saved invented.ged as GEDCOM 5.5.1. That format could not carry 1 of them:',
-        notes: [
-          {
-            message: 'GEDCOM 5.5.1 has no SEX value X; U was written.',
-            observed: 'X',
-            xref: '@I1@',
-          },
-        ],
+        headline: ref('save.gedcomNotes', {
+          savedAs: 'invented.ged',
+          format: '5.5.1',
+          count: 1,
+        }),
+        notes: [{ message: ref('export.sexXDowngraded'), observed: 'X', xref: '@I1@' }],
       },
     });
 
@@ -108,7 +131,10 @@ describe('results wait their turn', () => {
   it('shows an export that lost nothing without an empty list beneath it', () => {
     show({
       ...quiet,
-      saved: { headline: 'Saved invented.ged, with nothing left behind.', notes: [] },
+      saved: {
+        headline: ref('save.gedcomClean', { savedAs: 'invented.ged', format: '7.0' }),
+        notes: [],
+      },
     });
     expect(container.querySelectorAll('.saved li')).toHaveLength(0);
   });

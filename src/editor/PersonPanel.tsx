@@ -18,6 +18,9 @@
  */
 import { useId } from 'react';
 
+import { useT } from '../i18n/context.js';
+import { ref, type MessageKey } from '../i18n/keys.js';
+
 import {
   addChild,
   addParents,
@@ -40,11 +43,11 @@ export interface PersonPanelProps {
 /* The sign beside each option is the one the chart draws, so the value chosen here and the mark
    that appears on the box are recognisably the same thing. The word stays: a list of bare signs
    is a puzzle, and it is the word a screen reader has to read out. */
-const SEXES: readonly { readonly value: Sex; readonly label: string }[] = [
-  { value: 'M', label: 'Male' },
-  { value: 'F', label: 'Female' },
-  { value: 'X', label: 'Neither' },
-  { value: 'U', label: 'Undetermined' },
+const SEXES: readonly { readonly value: Sex; readonly label: MessageKey }[] = [
+  { value: 'M', label: 'sex.M' },
+  { value: 'F', label: 'sex.F' },
+  { value: 'X', label: 'sex.X' },
+  { value: 'U', label: 'sex.U' },
 ];
 
 /**
@@ -55,20 +58,20 @@ const SEXES: readonly { readonly value: Sex; readonly label: string }[] = [
  */
 const DATED: readonly {
   readonly tag: IndividualEventTag;
-  readonly label: string;
+  readonly label: MessageKey;
   readonly sign?: string;
 }[] = [
-  { tag: 'BIRT', label: 'Born' },
-  { tag: 'BAPM', label: 'Baptised' },
-  { tag: 'DEAT', label: 'Died', sign: DEATH_SIGN },
-  { tag: 'BURI', label: 'Buried' },
+  { tag: 'BIRT', label: 'person.event.BIRT' },
+  { tag: 'BAPM', label: 'person.event.BAPM' },
+  { tag: 'DEAT', label: 'person.event.DEAT', sign: DEATH_SIGN },
+  { tag: 'BURI', label: 'person.event.BURI' },
 ];
 
 export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
   const id = useId();
+  const t = useT();
   const person = doc.individuals.find((one) => one.xref === xref);
-  if (person === undefined)
-    return <p className="panel-empty">That person is no longer here.</p>;
+  if (person === undefined) return <p className="panel-empty">{t('person.gone')}</p>;
 
   const parts = nameOf(person);
   const died = eventDate(person, 'DEAT');
@@ -84,7 +87,9 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
       editPerson(
         xref,
         { names: [next, ...(person.names ?? []).slice(1)] },
-        `Rename ${written === '' ? 'a person' : written.replace(/\//g, '')}`,
+        written === ''
+          ? ref('command.renameAnon')
+          : ref('command.rename', { name: written.replace(/\//g, '') }),
       ),
     );
   };
@@ -96,7 +101,7 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
       editPerson(
         xref,
         { events: events.length === 0 ? undefined : events },
-        `Edit a date for ${displayName(person)}`,
+        ref('command.editDate', { name: displayName(person) }),
       ),
     );
   };
@@ -105,17 +110,19 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
     <div className="panel">
       <h2>
         {sign === '' ? null : (
-          <span className="sign" title={sexWord(person.sex)}>{`${sign} `}</span>
+          <span className="sign" title={sexWord(person.sex, t)}>{`${sign} `}</span>
         )}
         {displayName(person)}
         {died === '' ? null : (
-          <span className="sign" title={`Died ${died}`}>{` ${DEATH_SIGN}`}</span>
+          <span className="sign" title={t('person.diedTitle', { date: died })}>
+            {` ${DEATH_SIGN}`}
+          </span>
         )}
       </h2>
       <p className="xref">{displayXref(xref)}</p>
 
       <div className="field">
-        <label htmlFor={`${id}-given`}>Given name</label>
+        <label htmlFor={`${id}-given`}>{t('person.given')}</label>
         <input
           id={`${id}-given`}
           key={`${xref}-given-${parts.given}`}
@@ -127,7 +134,7 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
       </div>
 
       <div className="field">
-        <label htmlFor={`${id}-surname`}>Surname</label>
+        <label htmlFor={`${id}-surname`}>{t('person.surname')}</label>
         <input
           id={`${id}-surname`}
           key={`${xref}-surname-${parts.surnames[0] ?? ''}`}
@@ -140,7 +147,7 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
 
       <div className="field">
         {/* A second surname is an ordinary second SURN piece, not a special field. */}
-        <label htmlFor={`${id}-surname2`}>Second surname</label>
+        <label htmlFor={`${id}-surname2`}>{t('person.surname2')}</label>
         <input
           id={`${id}-surname2`}
           key={`${xref}-surname2-${parts.surnames[1] ?? ''}`}
@@ -152,7 +159,7 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
       </div>
 
       <div className="field">
-        <label htmlFor={`${id}-sex`}>Sex</label>
+        <label htmlFor={`${id}-sex`}>{t('person.sex')}</label>
         <select
           id={`${id}-sex`}
           value={person.sex ?? 'U'}
@@ -161,14 +168,14 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
               editPerson(
                 xref,
                 { sex: event.target.value as Sex },
-                `Set the sex of ${displayName(person)}`,
+                ref('command.setSex', { name: displayName(person) }),
               ),
             );
           }}
         >
           {SEXES.map((option) => (
             <option key={option.value} value={option.value}>
-              {`${sexSign(option.value)} ${option.label}`}
+              {`${sexSign(option.value)} ${t(option.label)}`}
             </option>
           ))}
         </select>
@@ -178,14 +185,14 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
         <div className="field" key={event.tag}>
           <label htmlFor={`${id}-${event.tag}`}>
             {event.sign === undefined || eventDate(person, event.tag) === ''
-              ? event.label
-              : `${event.label} ${event.sign}`}
+              ? t(event.label)
+              : `${t(event.label)} ${event.sign}`}
           </label>
           <input
             id={`${id}-${event.tag}`}
             key={`${xref}-${event.tag}-${eventDate(person, event.tag)}`}
             defaultValue={eventDate(person, event.tag)}
-            placeholder="e.g. 12 MAR 1901, ABT 1880"
+            placeholder={t('person.datePlaceholder')}
             onBlur={(input) => {
               setDate(event.tag, input.target.value);
             }}
@@ -200,21 +207,21 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
             run(addSpouse(xref));
           }}
         >
-          Add a partner
+          {t('person.addPartner')}
         </button>
         <button
           type="button"
           disabled={(person.familiesAsChild ?? []).length > 0}
           title={
             (person.familiesAsChild ?? []).length > 0
-              ? 'This person already hangs from a family'
+              ? t('person.addParents.disabled')
               : undefined
           }
           onClick={() => {
             run(addParents(xref));
           }}
         >
-          Add parents
+          {t('person.addParents')}
         </button>
         {families.map((family) => (
           <button
@@ -224,7 +231,7 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
               run(addChild(family));
             }}
           >
-            Add a child to {displayXref(family)}
+            {t('person.addChildTo', { xref: displayXref(family) })}
           </button>
         ))}
       </div>
@@ -234,13 +241,19 @@ export function PersonPanel({ doc, xref, run, onSelect }: PersonPanelProps) {
           type="button"
           onClick={() => {
             // What else goes is stated before it goes, because Delete does not say it.
-            const also = links === 0 ? '' : ` and ${String(links)} family link(s) with them`;
-            if (globalThis.confirm(`Delete ${displayName(person)}${also}?`)) {
+            const asked =
+              links === 0
+                ? t('person.deleteConfirm', { name: displayName(person) })
+                : t('person.deleteConfirmLinked', {
+                    name: displayName(person),
+                    count: links,
+                  });
+            if (globalThis.confirm(asked)) {
               run(deletePerson(xref));
             }
           }}
         >
-          Delete this person
+          {t('person.delete')}
         </button>
       </div>
 
@@ -259,13 +272,15 @@ function Related({
   readonly person: Individual;
   readonly onSelect: (xref: Xref) => void;
 }) {
+  /* Before the early return: a hook has to run on every render of a component, and this one
+     returns nothing when the person is in no family. */
+  const t = useT();
   const families = doc.families.filter(
     (family) =>
       (person.familiesAsSpouse ?? []).some((link) => link.xref === family.xref) ||
       (person.familiesAsChild ?? []).some((link) => link.xref === family.xref),
   );
   if (families.length === 0) return null;
-
   const nameOfXref = (who: Xref | undefined): string => {
     if (who === undefined) return '';
     const found = doc.individuals.find((one) => one.xref === who);
@@ -274,7 +289,7 @@ function Related({
 
   return (
     <div className="related">
-      <h3>In these families</h3>
+      <h3>{t('person.inFamilies')}</h3>
       {families.map((family) => (
         <div key={family.xref}>
           <p className="family-of">

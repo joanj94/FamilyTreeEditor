@@ -15,6 +15,7 @@
  * producing application belongs, and for a document typed in here that is the truth. Nothing sets
  * `origin`: that field records what a file declared, and there was no file.
  */
+import { ref, type MessageRef } from '../i18n/keys.js';
 import { addIndividual } from '../model/ops.js';
 import type { GedcomDoc, Xref } from '../model/types.js';
 
@@ -27,7 +28,7 @@ import type { GedcomDoc, Xref } from '../model/types.js';
 export const NEW_TREE_NAME = 'untitled.ged';
 
 /** The label the first history entry carries, and so the one an undo would offer to reverse. */
-export const NEW_TREE_LABEL = 'Started a new tree';
+export const NEW_TREE_LABEL: MessageRef = ref('command.newTree');
 
 export interface BlankTree {
   readonly doc: GedcomDoc;

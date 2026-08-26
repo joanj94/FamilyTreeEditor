@@ -74,9 +74,11 @@ const layering = [
                 'react-dom/*',
                 '**/render/**',
                 '**/editor/**',
+                '**/i18n/context*',
+                '**/i18n/LanguageProvider*',
               ],
               message:
-                'Parsing, the document model and persistence stay independent of the UI, so each can be tested and reused without one.',
+                'Parsing, the document model and persistence stay independent of the UI, so each can be tested and reused without one. They may name a message through i18n/keys or i18n/catalog, but the React side of i18n is UI: a layer that reached for the provider would pull React back in without tripping the rule above it.',
             },
           ],
         },

@@ -10,6 +10,7 @@
  * description of the typography rather than of the person -- so every glyph here has a spoken
  * counterpart, and `displayCaption` is what the accessible label is built from.
  */
+import type { MessageKey, Translate } from '../i18n/keys.js';
 import type { Individual, Sex, Xref } from './types.js';
 
 /**
@@ -35,12 +36,17 @@ export function displayXref(xref: Xref): string {
  */
 const SEX_SIGNS: Readonly<Record<Sex, string>> = { M: '♂', F: '♀', X: '⚧', U: '?' };
 
-/** How each sex is spoken, for labels that are heard rather than read. */
-const SEX_WORDS: Readonly<Record<Sex, string>> = {
-  M: 'male',
-  F: 'female',
-  X: 'neither male nor female',
-  U: 'sex undetermined',
+/**
+ * How each sex is spoken, for labels that are heard rather than read.
+ *
+ * Keys rather than words, because this is the half of the module that has a language. The signs
+ * above have none -- ♀ is ♀ in every locale -- which is why only this side takes a translator.
+ */
+const SEX_WORDS: Readonly<Record<Sex, MessageKey>> = {
+  M: 'sexWord.M',
+  F: 'sexWord.F',
+  X: 'sexWord.X',
+  U: 'sexWord.U',
 };
 
 /** The sign for a sex, or nothing where the record does not give one. */
@@ -49,8 +55,8 @@ export function sexSign(sex: Sex | undefined): string {
 }
 
 /** The word for a sex, or nothing where the record does not give one. */
-export function sexWord(sex: Sex | undefined): string {
-  return sex === undefined ? '' : SEX_WORDS[sex];
+export function sexWord(sex: Sex | undefined, t: Translate): string {
+  return sex === undefined ? '' : t(SEX_WORDS[sex]);
 }
 
 /**
@@ -125,15 +131,20 @@ export function displayMarks(individual: Individual): string {
  * The same facts as `displayMarks`, in words. Assistive technology reads ♀ as "female sign" and †
  * as "dagger", which describes the drawing rather than the person -- so the label is built from
  * this instead of from the glyphs.
+ *
+ * This is the one function here that needs a language, and it is the reason the split above
+ * exists: `displayMarks` is measured by the layout and must mean the same thing in every locale,
+ * while this is read aloud and must not. A translator is passed in rather than imported, because
+ * `model/` may not reach the UI -- see `eslint.config.js`.
  */
-export function displayCaption(individual: Individual): string {
+export function displayCaption(individual: Individual, t: Translate): string {
   const born = yearOf(individual, 'BIRT');
   const died = yearOf(individual, 'DEAT');
   const parts = [
     displayName(individual),
-    sexWord(individual.sex),
-    born === '' ? '' : `born ${born}`,
-    died === '' ? '' : `died ${died}`,
+    sexWord(individual.sex, t),
+    born === '' ? '' : t('caption.born', { year: born }),
+    died === '' ? '' : t('caption.died', { year: died }),
   ];
   return parts.filter((part) => part !== '').join(', ');
 }

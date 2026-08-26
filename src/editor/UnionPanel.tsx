@@ -11,6 +11,9 @@
  */
 import { useId, useMemo } from 'react';
 
+import { useT } from '../i18n/context.js';
+import { ref, type MessageKey } from '../i18n/keys.js';
+
 import {
   addChild,
   deleteUnion,
@@ -32,18 +35,19 @@ export interface UnionPanelProps {
   readonly onSelect: (xref: Xref) => void;
 }
 
-const DATED: readonly { readonly tag: FamilyEventTag; readonly label: string }[] = [
-  { tag: 'MARR', label: 'Married' },
-  { tag: 'DIV', label: 'Divorced' },
+const DATED: readonly { readonly tag: FamilyEventTag; readonly label: MessageKey }[] = [
+  { tag: 'MARR', label: 'union.event.MARR' },
+  { tag: 'DIV', label: 'union.event.DIV' },
 ];
 
 export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
   const id = useId();
+  const t = useT();
   /* The same reading the chart is drawn from, so the number said here is the number drawn there.
      Memoised because it walks the whole document and the panel re-renders on every edit. */
   const relations = useMemo(() => readRelations(doc), [doc]);
   const family = doc.families.find((one) => one.xref === xref);
-  if (family === undefined) return <p className="panel-empty">That union is no longer here.</p>;
+  if (family === undefined) return <p className="panel-empty">{t('union.gone')}</p>;
 
   const nameOfXref = (who: Xref | undefined): string => {
     if (who === undefined) return '';
@@ -74,7 +78,7 @@ export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
       editUnion(
         xref,
         { events: events.length === 0 ? undefined : events },
-        'Edit a union date',
+        ref('command.editUnionDate'),
       ),
     );
   };
@@ -82,13 +86,16 @@ export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
   return (
     <div className="panel">
       <h2>
-        {nameOfXref(family.husband) || 'Unknown'} and {nameOfXref(family.wife) || 'Unknown'}
+        {nameOfXref(family.husband) || t('union.unknownPartner')} and{' '}
+        {nameOfXref(family.wife) || t('union.unknownPartner')}
       </h2>
       <p className="xref">{displayXref(xref)}</p>
 
       {mark === 0 ? null : (
-        <p className="marriage-number" title="Counted from the order of that partner's unions.">
-          Marriage ({mark}){remarried === undefined ? '' : ` of ${nameOfXref(remarried)}`}
+        <p className="marriage-number" title={t('union.marriageNumberTitle')}>
+          {remarried === undefined
+            ? t('union.marriageNumber', { n: mark })
+            : t('union.marriageNumberOf', { n: mark, name: nameOfXref(remarried) })}
         </p>
       )}
 
@@ -96,9 +103,9 @@ export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
         const who = role === 'HUSB' ? family.husband : family.wife;
         return (
           <div className="field" key={role}>
-            <span className="label">Partner ({role})</span>
+            <span className="label">{t('union.partner', { role })}</span>
             {who === undefined ? (
-              <span className="empty">Nobody yet</span>
+              <span className="empty">{t('union.nobodyYet')}</span>
             ) : (
               <span className="partner">
                 <button
@@ -116,7 +123,7 @@ export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
                     run(setPartnerTo(xref, role, null));
                   }}
                 >
-                  Remove
+                  {t('union.remove')}
                 </button>
               </span>
             )}
@@ -126,14 +133,14 @@ export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
 
       {DATED.map((event) => (
         <div className="field" key={event.tag}>
-          <label htmlFor={`${id}-${event.tag}`}>{event.label}</label>
+          <label htmlFor={`${id}-${event.tag}`}>{t(event.label)}</label>
           <input
             id={`${id}-${event.tag}`}
             key={`${xref}-${event.tag}-${family.events?.find((one) => one.tag === event.tag)?.date?.value ?? ''}`}
             defaultValue={
               family.events?.find((one) => one.tag === event.tag)?.date?.value ?? ''
             }
-            placeholder="e.g. 12 MAR 1901, ABT 1880"
+            placeholder={t('person.datePlaceholder')}
             onBlur={(input) => {
               setDate(event.tag, input.target.value);
             }}
@@ -142,9 +149,9 @@ export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
       ))}
 
       <div className="related">
-        <h3>Children</h3>
+        <h3>{t('union.children')}</h3>
         {children.length === 0 ? (
-          <p className="empty">None recorded.</p>
+          <p className="empty">{t('union.noChildren')}</p>
         ) : (
           <ul>
             {children.map((child) => (
@@ -160,12 +167,12 @@ export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
                 </button>
                 <button
                   type="button"
-                  title="Take this child out of this family. The person stays."
+                  title={t('union.detachTitle')}
                   onClick={() => {
                     run(detachChild(xref, child));
                   }}
                 >
-                  Detach
+                  {t('union.detach')}
                 </button>
               </li>
             ))}
@@ -180,7 +187,7 @@ export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
             run(addChild(xref));
           }}
         >
-          Add a child
+          {t('union.addChild')}
         </button>
       </div>
 
@@ -191,12 +198,12 @@ export function UnionPanel({ doc, xref, run, onSelect }: UnionPanelProps) {
             // The people stay; only this union and its links go. Say so.
             const cost =
               children.length === 0
-                ? 'The people in it stay.'
-                : `The ${String(children.length)} children stay, but stop hanging from it.`;
-            if (globalThis.confirm(`Delete this union? ${cost}`)) run(deleteUnion(xref));
+                ? t('union.deleteCostNone')
+                : t('union.deleteCostChildren', { count: children.length });
+            if (globalThis.confirm(t('union.deleteConfirm', { cost }))) run(deleteUnion(xref));
           }}
         >
-          Delete this union
+          {t('union.delete')}
         </button>
       </div>
     </div>

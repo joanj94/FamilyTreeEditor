@@ -22,6 +22,12 @@ import { connectorSegments, type PathPoint } from '../layout/crossings.js';
 import { GEOMETRY, computeLayout } from '../layout/layout.js';
 import { measureText } from '../layout/text.js';
 import type { Family, GedcomDoc, Individual, Xref } from '../model/types.js';
+import { makeTranslate } from '../i18n/catalog.js';
+import { EN } from '../i18n/keys.js';
+
+/* These suites assert English prose. The catalog is asked for it explicitly rather than
+   through a provider, so a change of default language never silently rewrites them. */
+const say = makeTranslate('en', EN);
 
 interface Union {
   readonly spouses: readonly Xref[];
@@ -72,7 +78,7 @@ const household = tree(
 );
 
 const scened = (doc: GedcomDoc, collapsed = new Set<Xref>()) =>
-  buildScene(doc, computeLayout(doc, { collapsed }), collapsed);
+  buildScene(doc, computeLayout(doc, { collapsed }), say, collapsed);
 
 describe('a box the size of its name', () => {
   const long = 'GivenLongish GivenSecond /SurnameLonger/';
@@ -196,17 +202,20 @@ describe('what a box says', () => {
     // A screen reader says "female sign" and "dagger" for ♀ and †, which describes the drawing
     // rather than the person.
     expect(
-      displayCaption({
-        xref: '@I1@',
-        sex: 'F',
-        names: [{ value: 'GivenA /SurnameB/' }],
-        events: [
-          { tag: 'BIRT', date: { value: '1900', start: { year: 1900 } } },
-          { tag: 'DEAT', date: { value: '1970', start: { year: 1970 } } },
-        ],
-      }),
+      displayCaption(
+        {
+          xref: '@I1@',
+          sex: 'F',
+          names: [{ value: 'GivenA /SurnameB/' }],
+          events: [
+            { tag: 'BIRT', date: { value: '1900', start: { year: 1900 } } },
+            { tag: 'DEAT', date: { value: '1970', start: { year: 1970 } } },
+          ],
+        },
+        say,
+      ),
     ).toBe('GivenA SurnameB, female, born 1900, died 1970');
-    expect(displayCaption({ xref: '@I1@', names: [{ value: 'GivenA /SurnameB/' }] })).toBe(
+    expect(displayCaption({ xref: '@I1@', names: [{ value: 'GivenA /SurnameB/' }] }, say)).toBe(
       'GivenA SurnameB',
     );
   });

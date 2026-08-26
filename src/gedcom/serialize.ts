@@ -43,12 +43,19 @@ import type {
 
 import type { ParsedRecord } from './parse.js';
 import { MAX_LINE_5551, writeLines } from './write.js';
+import { ref, type MessageRef } from '../i18n/keys.js';
 
 export type ExportDialect = '7.0' | '5.5.1';
 
-/** Something the export could not carry across, or decided on the document's behalf. */
+/**
+ * Something the export could not carry across, or decided on the document's behalf.
+ *
+ * `message` is named rather than written, so a note reads in whatever language the user is in.
+ * `observed` is not: it is the literal value found in the file -- `ANSEL`, `X`, `(absent)` -- and
+ * translating it would turn evidence into commentary.
+ */
 export interface ExportNote {
-  readonly message: string;
+  readonly message: MessageRef;
   readonly observed: string;
   /** The record it happened in, where it can be traced to one. */
   readonly xref?: string;
@@ -104,7 +111,7 @@ function phraseNodes(
   if (phrase === undefined) return [];
   if (context.dialect === '7.0') return [node('PHRASE', phrase)];
   context.note({
-    message: `GEDCOM 5.5.1 has no PHRASE structure; the phrase under ${under} was not written.`,
+    message: ref('export.phraseDropped', { under }),
     observed: phrase,
     ...(xref === undefined ? {} : { xref }),
   });
@@ -267,7 +274,7 @@ function sexNodes(
   if (sex === undefined) return [];
   if (sex !== 'X' || context.dialect === '7.0') return [node('SEX', sex)];
   context.note({
-    message: 'GEDCOM 5.5.1 has no SEX value X; U was written, which says less.',
+    message: ref('export.sexXDowngraded'),
     observed: 'X',
     xref,
   });
@@ -322,7 +329,7 @@ function versionFor(header: Header, context: Context): string {
   if (declared.startsWith(family)) return header.gedcomVersion;
   if (declared !== '') {
     context.note({
-      message: `The header declared GEDCOM ${declared}; ${context.dialect} was written instead.`,
+      message: ref('export.versionRewritten', { declared, dialect: context.dialect }),
       observed: declared,
     });
   }
@@ -347,13 +354,12 @@ function headerRecord(doc: GedcomDoc, context: Context): ParsedRecord {
     const observed = declaredCharset.payload ?? '(none)';
     if (context.dialect === '7.0') {
       context.note({
-        message:
-          'GEDCOM 7 removed HEAD.CHAR; the declaration was dropped and the file is UTF-8.',
+        message: ref('export.charDropped'),
         observed,
       });
     } else if (observed !== OUTPUT_ENCODING) {
       context.note({
-        message: `HEAD.CHAR was rewritten to ${OUTPUT_ENCODING}, which is what the bytes are.`,
+        message: ref('export.charRewritten', { encoding: OUTPUT_ENCODING }),
         observed,
       });
     }
@@ -361,8 +367,7 @@ function headerRecord(doc: GedcomDoc, context: Context): ParsedRecord {
 
   if (context.dialect === '5.5.1' && header.submitter === undefined) {
     context.note({
-      message:
-        'GEDCOM 5.5.1 requires HEAD.SUBM and this document has no submitter. None was invented.',
+      message: ref('export.submitterMissing'),
       observed: '(absent)',
     });
   }

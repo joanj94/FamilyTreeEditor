@@ -28,6 +28,7 @@ import {
   partnersOf,
   type GedcomIndex,
 } from './graph.js';
+import { ref, type MessageKey, type MessageParams, type MessageRef } from '../i18n/keys.js';
 import type { GedcomDoc, Pointer, Xref } from './types.js';
 
 export type AuditSeverity = 'error' | 'warning';
@@ -52,8 +53,15 @@ export type AuditCode =
 export interface AuditFinding {
   readonly code: AuditCode;
   readonly severity: AuditSeverity;
-  /** Prose naming the records involved, renderable without knowing the codes. */
-  readonly message: string;
+  /**
+   * The message named rather than written, so it can be read in whatever language is current.
+   *
+   * A code and a message are not the same thing and neither replaces the other: several distinct
+   * sentences share one `AuditCode` -- a dangling pointer reads differently depending on whether a
+   * family named a missing person or a person named a missing family -- and the code is what
+   * severity and filtering are decided from.
+   */
+  readonly message: MessageRef;
   /** The record the problem was found in. */
   readonly xref?: Xref;
   /** The other records the problem involves, in document order. */
@@ -75,14 +83,15 @@ const SEVERITY: Record<AuditCode, AuditSeverity> = {
    deep-equality assertion. */
 function report(
   code: AuditCode,
-  message: string,
+  key: MessageKey,
+  params?: MessageParams,
   xref?: Xref,
   related?: readonly Xref[],
 ): AuditFinding {
   return {
     code,
     severity: SEVERITY[code],
-    message,
+    message: ref(key, params),
     ...(xref === undefined ? {} : { xref }),
     ...(related === undefined ? {} : { related }),
   };
@@ -102,12 +111,7 @@ function duplicateXrefs(doc: GedcomDoc): readonly AuditFinding[] {
     seen.add(xref);
   }
   return [...duplicated].map((xref) =>
-    report(
-      'DUPLICATE_XREF',
-      `Identifier ${xref} names more than one record. Identifiers are unique across the whole ` +
-        `dataset, not within a record type.`,
-      xref,
-    ),
+    report('DUPLICATE_XREF', 'audit.duplicateXref', { xref }, xref),
   );
 }
 
@@ -132,7 +136,8 @@ function auditFamilies(index: GedcomIndex): readonly AuditFinding[] {
         findings.push(
           report(
             'DANGLING_POINTER',
-            `Family ${family.xref} names person ${pointer}, which the document does not contain.`,
+            'audit.danglingPointer.family',
+            { xref: family.xref, pointer },
             family.xref,
             [pointer],
           ),
@@ -144,7 +149,8 @@ function auditFamilies(index: GedcomIndex): readonly AuditFinding[] {
       findings.push(
         report(
           'DUPLICATE_LINK',
-          `Family ${family.xref} lists ${repeated} as a child more than once.`,
+          'audit.duplicateLink.child',
+          { xref: family.xref, pointer: repeated },
           family.xref,
           [repeated],
         ),
@@ -161,8 +167,8 @@ function auditFamilies(index: GedcomIndex): readonly AuditFinding[] {
         findings.push(
           report(
             'ASYMMETRIC_LINK',
-            `Family ${family.xref} names ${partner} as a partner, but ${partner} has no FAMS ` +
-              `link back to it.`,
+            'audit.asymmetric.partnerNoFams',
+            { xref: family.xref, pointer: partner },
             family.xref,
             [partner],
           ),
@@ -180,8 +186,8 @@ function auditFamilies(index: GedcomIndex): readonly AuditFinding[] {
         findings.push(
           report(
             'ASYMMETRIC_LINK',
-            `Family ${family.xref} lists ${child} as a child, but ${child} has no FAMC link ` +
-              `back to it.`,
+            'audit.asymmetric.childNoFamc',
+            { xref: family.xref, pointer: child },
             family.xref,
             [child],
           ),
@@ -205,8 +211,8 @@ function auditIndividuals(index: GedcomIndex): readonly AuditFinding[] {
         findings.push(
           report(
             'DANGLING_POINTER',
-            `Person ${individual.xref} links to family ${pointer}, which the document does not ` +
-              `contain.`,
+            'audit.danglingPointer.individual',
+            { xref: individual.xref, pointer },
             individual.xref,
             [pointer],
           ),
@@ -218,7 +224,8 @@ function auditIndividuals(index: GedcomIndex): readonly AuditFinding[] {
       findings.push(
         report(
           'DUPLICATE_LINK',
-          `Person ${individual.xref} links to family ${repeated} more than once.`,
+          'audit.duplicateLink.family',
+          { xref: individual.xref, pointer: repeated },
           individual.xref,
           [repeated],
         ),
@@ -232,8 +239,8 @@ function auditIndividuals(index: GedcomIndex): readonly AuditFinding[] {
         findings.push(
           report(
             'ASYMMETRIC_LINK',
-            `Person ${individual.xref} links to family ${pointer} as a child, but ${pointer} has ` +
-              `no CHIL pointer back.`,
+            'audit.asymmetric.famcNoChil',
+            { xref: individual.xref, pointer },
             individual.xref,
             [pointer],
           ),
@@ -248,8 +255,8 @@ function auditIndividuals(index: GedcomIndex): readonly AuditFinding[] {
         findings.push(
           report(
             'ASYMMETRIC_LINK',
-            `Person ${individual.xref} links to family ${pointer} as a partner, but ${pointer} ` +
-              `names neither HUSB nor WIFE pointing back.`,
+            'audit.asymmetric.famsNoPartner',
+            { xref: individual.xref, pointer },
             individual.xref,
             [pointer],
           ),
@@ -328,9 +335,12 @@ function auditWarnings(index: GedcomIndex): readonly AuditFinding[] {
       findings.push(
         report(
           'CHILD_OF_SEVERAL_FAMILIES',
-          `Person ${individual.xref} is a child of ${families.length} families ` +
-            `(${families.join(', ')}). That is legal -- a birth family and an adoptive one, for ` +
-            `instance -- and worth confirming.`,
+          'audit.childOfSeveralFamilies',
+          {
+            xref: individual.xref,
+            count: families.length,
+            families: families.join(', '),
+          },
           individual.xref,
           families,
         ),
@@ -347,8 +357,8 @@ function auditWarnings(index: GedcomIndex): readonly AuditFinding[] {
       findings.push(
         report(
           'UNCONNECTED_PERSON',
-          `Person ${individual.xref} belongs to no family. Not necessarily wrong -- a person is ` +
-            `added before they are linked -- but a lone record is often a link that was lost.`,
+          'audit.unconnectedPerson',
+          { xref: individual.xref },
           individual.xref,
         ),
       );
@@ -375,8 +385,8 @@ export function audit(doc: GedcomDoc): readonly AuditFinding[] {
       .map((individual) =>
         report(
           'DESCENT_CYCLE',
-          `Person ${individual.xref} is their own ancestor. No tree can be drawn through that, ` +
-            `so it is a fault in the links rather than an unusual family.`,
+          'audit.descentCycle',
+          { xref: individual.xref },
           individual.xref,
           [...ancestorsOf(index, individual.xref)].filter((ancestor) => cyclic.has(ancestor)),
         ),

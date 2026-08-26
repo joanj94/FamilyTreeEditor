@@ -49,7 +49,8 @@ const empty: GedcomDoc = { header: { gedcomVersion: '7.0' }, individuals: [], fa
 /** Run a command and insist it was accepted, returning what it produced. */
 function accept(history: History, command: Command) {
   const outcome = apply(history, command);
-  if (!outcome.ok) throw new Error(`expected ${command.label} to apply: ${outcome.problem}`);
+  if (!outcome.ok)
+    throw new Error(`expected ${say(command.label)} to apply: ${say(outcome.problem.say)}`);
   return outcome;
 }
 
@@ -95,7 +96,7 @@ describe('applying an edit', () => {
     const start = begin(empty);
     const outcome = apply(start, editPerson('@I9@', { sex: 'M' }));
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.problem).toContain('@I9@');
+    if (!outcome.ok) expect(say(outcome.problem.say)).toContain('@I9@');
     expect(start.present.doc).toBe(empty);
   });
 
@@ -106,13 +107,13 @@ describe('applying an edit', () => {
     const family = second.history.present.doc.families[1]?.xref ?? '';
     const outcome = apply(second.history, attachChild(family, husband));
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.problem).toMatch(/ancestor|cycle/i);
+    if (!outcome.ok) expect(say(outcome.problem.say)).toMatch(/ancestor|cycle/i);
   });
 
   it('says what was refused in terms a user can act on', () => {
     const outcome = apply(begin(empty), deleteUnion('@F9@'));
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.problem).toMatch(/no family @F9@/i);
+    if (!outcome.ok) expect(say(outcome.problem.say)).toMatch(/no family @F9@/i);
   });
 });
 
@@ -193,10 +194,25 @@ describe('the structural edits', () => {
   });
 });
 
+import { ref, type MessageRef } from '../i18n/keys.js';
+import { makeTranslate } from '../i18n/catalog.js';
+import { EN } from '../i18n/keys.js';
+
+/* These suites assert English prose. The catalog is asked for it explicitly rather than
+   through a provider, so a change of default language never silently rewrites them. */
+const say = makeTranslate('en', EN);
+
+/** A label that may not exist -- there is nothing to undo at the start of a history. */
+const sayMaybe = (label: MessageRef | undefined): string =>
+  label === undefined ? '' : say(label);
+
+/** A label an editor would give an edit, carried through the history unchanged. */
+const CORRECTION = ref('command.setSex', { name: 'GivenA' });
+
 describe('editing fields', () => {
   it('changes what was named and leaves the rest', () => {
     const { history, husband } = household();
-    const after = accept(history, editPerson(husband, { sex: 'X' }, 'Correct the sex'));
+    const after = accept(history, editPerson(husband, { sex: 'X' }, CORRECTION));
     const person = after.history.present.doc.individuals[0];
     expect(person?.sex).toBe('X');
     expect(person?.names?.[0]?.value).toBe('GivenA /SurnameB/');
@@ -204,8 +220,10 @@ describe('editing fields', () => {
 
   it('carries the label the editor gave it, for the undo menu', () => {
     const { history, husband } = household();
-    const after = accept(history, editPerson(husband, { sex: 'X' }, 'Correct the sex'));
-    expect(undoLabel(after.history)).toBe('Correct the sex');
+    const after = accept(history, editPerson(husband, { sex: 'X' }, CORRECTION));
+    /* The reference itself comes back, not a sentence: that is what lets the undo menu be read
+       in whatever language is current rather than the one the edit happened in. */
+    expect(undoLabel(after.history)).toEqual(CORRECTION);
   });
 
   it('records a marriage on the union', () => {
@@ -250,8 +268,8 @@ describe('undo and redo', () => {
 
   it('offers what it would undo and redo by name', () => {
     const after = accept(begin(empty), addPerson());
-    expect(undoLabel(after.history)).toBe('Add a person');
-    expect(redoLabel(undo(after.history))).toBe('Add a person');
+    expect(sayMaybe(undoLabel(after.history))).toBe('Add a person');
+    expect(sayMaybe(redoLabel(undo(after.history)))).toBe('Add a person');
   });
 
   it('drops the redo branch once a new edit is made', () => {

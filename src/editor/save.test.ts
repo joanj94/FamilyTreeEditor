@@ -12,6 +12,12 @@ import { describe, expect, it } from 'vitest';
 
 import { prepareDownload, stemOf } from './save.js';
 import type { GedcomDoc } from '../model/types.js';
+import { makeTranslate } from '../i18n/catalog.js';
+import { EN } from '../i18n/keys.js';
+
+/* These suites assert English prose. The catalog is asked for it explicitly rather than
+   through a provider, so a change of default language never silently rewrites them. */
+const say = makeTranslate('en', EN);
 
 const doc = (over: Partial<GedcomDoc> = {}): GedcomDoc => ({
   header: { gedcomVersion: '7.0' },
@@ -54,8 +60,8 @@ describe('naming the file', () => {
   });
 
   it('names the kind of file, since that is what the dialog shows', () => {
-    expect(prepareDownload(doc(), 'x.ged', '5.5.1').kind).toBe('GEDCOM 5.5.1');
-    expect(prepareDownload(doc(), 'x.ged', 'json').kind).toContain('JSON');
+    expect(say(prepareDownload(doc(), 'x.ged', '5.5.1').kind)).toBe('GEDCOM 5.5.1');
+    expect(say(prepareDownload(doc(), 'x.ged', 'json').kind)).toContain('JSON');
   });
 });
 
@@ -63,31 +69,31 @@ describe('what it says was saved', () => {
   it('claims nothing was left behind only when nothing was', () => {
     const written = prepareDownload(neither, 'invented.ged', '7.0');
     expect(written.notes).toEqual([]);
-    expect(written.headline(written.filename)).toContain('nothing left behind');
+    expect(say(written.headline(written.filename))).toContain('nothing left behind');
   });
 
   it('names the file the user actually saved, not the one that was suggested', () => {
     // The save dialog lets them rename it. Reporting the suggestion sends them looking for a
     // file that does not exist.
     const written = prepareDownload(doc(), 'invented.ged', '7.0');
-    expect(written.headline('smith-1890.ged')).toContain('Saved smith-1890.ged');
-    expect(written.headline('smith-1890.ged')).not.toContain('invented');
+    expect(say(written.headline('smith-1890.ged'))).toContain('Saved smith-1890.ged');
+    expect(say(written.headline('smith-1890.ged'))).not.toContain('invented');
   });
 
   it('counts what the older format could not carry, and hands the notes over', () => {
     const written = prepareDownload(neither, 'invented.ged', '5.5.1');
     expect(written.notes.length).toBeGreaterThan(0);
-    expect(written.headline(written.filename)).toContain(
+    expect(say(written.headline(written.filename))).toContain(
       `could not carry ${String(written.notes.length)}`,
     );
-    expect(written.headline(written.filename)).not.toContain('nothing left behind');
-    expect(written.notes.some((note) => note.message.includes('SEX value X'))).toBe(true);
+    expect(say(written.headline(written.filename))).not.toContain('nothing left behind');
+    expect(written.notes.some((note) => say(note.message).includes('SEX value X'))).toBe(true);
   });
 
   it('says the JSON carries everything, because it does', () => {
     const written = prepareDownload(neither, 'invented.ged', 'json');
     expect(written.notes).toEqual([]);
-    expect(written.headline(written.filename)).toContain('carries everything');
+    expect(say(written.headline(written.filename))).toContain('carries everything');
     expect(written.mime).toBe('application/json');
   });
 });

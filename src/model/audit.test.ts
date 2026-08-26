@@ -16,9 +16,27 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { audit, auditErrors, isAuditClean } from './audit.js';
+import {
+  audit,
+  auditErrors,
+  isAuditClean,
+  type AuditCode,
+  type AuditFinding,
+} from './audit.js';
 import { validateDoc } from './validate.js';
 import type { Family, GedcomDoc, Individual } from './types.js';
+import { makeTranslate } from '../i18n/catalog.js';
+import { EN } from '../i18n/keys.js';
+
+/* These suites assert English prose. The catalog is asked for it explicitly rather than
+   through a provider, so a change of default language never silently rewrites them. */
+const say = makeTranslate('en', EN);
+
+/** The prose of the first finding with a given code, which is what these assertions read. */
+const sayFinding = (findings: readonly AuditFinding[], code: AuditCode): string => {
+  const found = findings.find((finding) => finding.code === code);
+  return found === undefined ? '' : say(found.message);
+};
 
 const doc = (individuals: Individual[], families: Family[]): GedcomDoc => ({
   header: { gedcomVersion: '7.0' },
@@ -59,12 +77,13 @@ describe('dangling pointers', () => {
   it('finds a family naming a person who does not exist', () => {
     const broken = doc([], [{ xref: '@F1@', husband: '@I9@' }]);
     const [finding] = audit(broken);
+    expect(finding).toBeDefined();
     expect(finding).toMatchObject({
       code: 'DANGLING_POINTER',
       severity: 'error',
       xref: '@F1@',
     });
-    expect(finding?.message).toContain('@I9@');
+    expect(sayFinding(audit(broken), 'DANGLING_POINTER')).toContain('@I9@');
   });
 
   it('finds a child pointer with no record behind it', () => {
@@ -110,7 +129,7 @@ describe('links recorded on one side only', () => {
     const broken = doc([{ xref: '@I1@' }], [{ xref: '@F1@', children: ['@I1@'] }]);
     const finding = audit(broken).find((f) => f.code === 'ASYMMETRIC_LINK');
     expect(finding).toMatchObject({ severity: 'error' });
-    expect(finding?.message).toMatch(/FAMC/);
+    expect(sayFinding(audit(broken), 'ASYMMETRIC_LINK')).toMatch(/FAMC/);
   });
 
   it('finds a child who claims a family that does not list them', () => {
@@ -118,12 +137,12 @@ describe('links recorded on one side only', () => {
       [{ xref: '@I1@', familiesAsChild: [{ xref: '@F1@' }] }],
       [{ xref: '@F1@' }],
     );
-    expect(audit(broken).find((f) => f.code === 'ASYMMETRIC_LINK')?.message).toMatch(/CHIL/);
+    expect(sayFinding(audit(broken), 'ASYMMETRIC_LINK')).toMatch(/CHIL/);
   });
 
   it('finds a partner link recorded by the family alone', () => {
     const broken = doc([{ xref: '@I1@' }], [{ xref: '@F1@', husband: '@I1@' }]);
-    expect(audit(broken).find((f) => f.code === 'ASYMMETRIC_LINK')?.message).toMatch(/FAMS/);
+    expect(sayFinding(audit(broken), 'ASYMMETRIC_LINK')).toMatch(/FAMS/);
   });
 
   it('finds a partner link recorded by the person alone', () => {
@@ -131,8 +150,7 @@ describe('links recorded on one side only', () => {
       [{ xref: '@I1@', familiesAsSpouse: [{ xref: '@F1@' }] }],
       [{ xref: '@F1@' }],
     );
-    const finding = audit(broken).find((f) => f.code === 'ASYMMETRIC_LINK');
-    expect(finding?.message).toMatch(/HUSB|WIFE|partner/i);
+    expect(sayFinding(audit(broken), 'ASYMMETRIC_LINK')).toMatch(/HUSB|WIFE|partner/i);
   });
 });
 

@@ -33,6 +33,7 @@ import {
   type IndividualPatch,
   type PartnerRole,
 } from '../model/ops.js';
+import { ref, type MessageRef } from '../i18n/keys.js';
 import { commit, type History } from './history.js';
 import type { GedcomDoc, Xref } from '../model/types.js';
 
@@ -44,15 +45,33 @@ export interface CommandResult {
 
 /** One named edit. Pure: it returns a new document and touches nothing. */
 export interface Command {
-  /** Phrased for an undo menu, in the imperative: "Add a child". */
-  readonly label: string;
+  /** Phrased for an undo menu, in the imperative: "Add a child". Named, so it can be re-read. */
+  readonly label: MessageRef;
   readonly run: (doc: GedcomDoc) => CommandResult;
+}
+
+/**
+ * Why an edit did not happen, in parts rather than as one sentence.
+ *
+ * **Nothing is translated here.** The obvious shape -- one `MessageRef` whose params hold the
+ * already-rendered command name and cause -- would bake the language in at the moment of refusal,
+ * so a reader who switched to Catalan afterwards would meet a Catalan sentence with English
+ * clauses inside it. Keeping the pieces apart lets the UI render all three together, in whatever
+ * language is current when they are read.
+ */
+export interface Refusal {
+  /** The refusal itself: what went wrong. */
+  readonly say: MessageRef;
+  /** The edit that was attempted, where naming it helps. */
+  readonly label?: MessageRef;
+  /** The underlying finding, where one caused the refusal. */
+  readonly cause?: MessageRef;
 }
 
 export type Applied =
   | { readonly ok: true; readonly history: History; readonly created?: Xref }
   /** The edit did not happen. `problem` is addressed to the user, not to a log. */
-  | { readonly ok: false; readonly problem: string };
+  | { readonly ok: false; readonly problem: Refusal };
 
 /**
  * Run a command, check it, and record it -- or refuse it and change nothing.
@@ -66,7 +85,9 @@ export function apply(history: History, command: Command): Applied {
   try {
     result = command.run(history.present.doc);
   } catch (error) {
-    if (error instanceof OperationError) return { ok: false, problem: error.message };
+    /* The operation refused in its own words, which are already addressed to the user and need
+       nothing wrapped around them. */
+    if (error instanceof OperationError) return { ok: false, problem: { say: error.ref } };
     throw error;
   }
 
@@ -76,7 +97,7 @@ export function apply(history: History, command: Command): Applied {
     const detail = first === undefined ? '' : `: ${first.path} ${first.message}`;
     return {
       ok: false,
-      problem: `${command.label} would produce an invalid document${detail}.`,
+      problem: { say: ref('command.refusedInvalid', { detail }), label: command.label },
     };
   }
 
@@ -85,7 +106,11 @@ export function apply(history: History, command: Command): Applied {
   if (firstBroken !== undefined) {
     return {
       ok: false,
-      problem: `${command.label} would break the tree: ${firstBroken.message}`,
+      problem: {
+        say: ref('command.refusedBroken'),
+        label: command.label,
+        cause: firstBroken.message,
+      },
     };
   }
 
@@ -97,19 +122,27 @@ export function apply(history: History, command: Command): Applied {
 }
 
 /** Change a person's own fields. */
-export function editPerson(xref: Xref, patch: IndividualPatch, label = 'Edit person'): Command {
+export function editPerson(
+  xref: Xref,
+  patch: IndividualPatch,
+  label: MessageRef = ref('command.editPerson'),
+): Command {
   return { label, run: (doc) => ({ doc: updateIndividual(doc, xref, patch) }) };
 }
 
 /** Change a family's own fields. */
-export function editUnion(xref: Xref, patch: FamilyPatch, label = 'Edit union'): Command {
+export function editUnion(
+  xref: Xref,
+  patch: FamilyPatch,
+  label: MessageRef = ref('command.editUnion'),
+): Command {
   return { label, run: (doc) => ({ doc: updateFamily(doc, xref, patch) }) };
 }
 
 /** Add a person who is joined to nobody yet. */
 export function addPerson(fields: IndividualFields = {}): Command {
   return {
-    label: 'Add a person',
+    label: ref('command.addPerson'),
     run: (doc) => {
       const { doc: next, xref } = addIndividual(doc, fields);
       return { doc: next, created: xref };
@@ -120,7 +153,7 @@ export function addPerson(fields: IndividualFields = {}): Command {
 /** Add a child to a family: a new person, and both sides of the link. */
 export function addChild(family: Xref, fields: IndividualFields = {}): Command {
   return {
-    label: 'Add a child',
+    label: ref('command.addChild'),
     run: (doc) => {
       const { doc: withPerson, xref } = addIndividual(doc, fields);
       return { doc: linkChild(withPerson, family, xref), created: xref };
@@ -137,7 +170,7 @@ export function addChild(family: Xref, fields: IndividualFields = {}): Command {
  */
 export function addSpouse(person: Xref, fields: IndividualFields = {}): Command {
   return {
-    label: 'Add a partner',
+    label: ref('command.addPartner'),
     run: (doc) => {
       const { doc: withPerson, xref } = addIndividual(doc, fields);
       const union = createUnion(withPerson, { husband: person, wife: xref });
@@ -155,7 +188,7 @@ export function addSpouse(person: Xref, fields: IndividualFields = {}): Command 
  */
 export function addParents(person: Xref): Command {
   return {
-    label: 'Add parents',
+    label: ref('command.addParents'),
     run: (doc) => {
       const father = addIndividual(doc, { sex: 'M' });
       const mother = addIndividual(father.doc, { sex: 'F' });
@@ -172,27 +205,39 @@ export function addParents(person: Xref): Command {
 /** Put an existing person into a partner slot, or empty it. */
 export function setPartnerTo(family: Xref, role: PartnerRole, person: Xref | null): Command {
   return {
-    label: person === null ? 'Remove a partner' : 'Set a partner',
+    label: person === null ? ref('command.removePartner') : ref('command.setPartner'),
     run: (doc) => ({ doc: setPartner(doc, family, role, person) }),
   };
 }
 
 /** Link an existing person to a family as a child. */
 export function attachChild(family: Xref, child: Xref): Command {
-  return { label: 'Attach a child', run: (doc) => ({ doc: linkChild(doc, family, child) }) };
+  return {
+    label: ref('command.attachChild'),
+    run: (doc) => ({ doc: linkChild(doc, family, child) }),
+  };
 }
 
 /** Take a child out of a family. The person stays; only the link goes. */
 export function detachChild(family: Xref, child: Xref): Command {
-  return { label: 'Detach a child', run: (doc) => ({ doc: unlinkChild(doc, family, child) }) };
+  return {
+    label: ref('command.detachChild'),
+    run: (doc) => ({ doc: unlinkChild(doc, family, child) }),
+  };
 }
 
 /** Remove a person, and every reference to them. */
 export function deletePerson(xref: Xref): Command {
-  return { label: 'Delete a person', run: (doc) => ({ doc: removeIndividual(doc, xref) }) };
+  return {
+    label: ref('command.deletePerson'),
+    run: (doc) => ({ doc: removeIndividual(doc, xref) }),
+  };
 }
 
 /** Remove a family. The people in it stay. */
 export function deleteUnion(xref: Xref): Command {
-  return { label: 'Delete a union', run: (doc) => ({ doc: removeFamily(doc, xref) }) };
+  return {
+    label: ref('command.deleteUnion'),
+    run: (doc) => ({ doc: removeFamily(doc, xref) }),
+  };
 }

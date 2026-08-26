@@ -26,6 +26,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { importGedcom, type ImportIssue } from '../gedcom/mapper.js';
 
 import { audit, type AuditFinding } from '../model/audit.js';
+import { useLanguage } from '../i18n/context.js';
+import { ref, type MessageRef } from '../i18n/keys.js';
 import { Chart } from '../render/Chart.js';
 import { Bar, type SaveFormat } from './Bar.js';
 import { EmptyScreen } from './EmptyScreen.js';
@@ -35,7 +37,7 @@ import { handOver } from './handOver.js';
 import { prepareDownload } from './save.js';
 import { UnionPanel } from './UnionPanel.js';
 import { NEW_TREE_LABEL, NEW_TREE_NAME, blankTree } from './blank.js';
-import { apply, type Command } from './commands.js';
+import { apply, type Command, type Refusal } from './commands.js';
 import { useTreeStore } from './persistence.js';
 import { hasUnwrittenWork, keptSummary } from './unsaved.js';
 import { begin, redo, undo, type History } from './history.js';
@@ -50,16 +52,18 @@ interface Opened {
   readonly issues: readonly ImportIssue[];
 }
 
-/** `2026-08-26T02:30:00.000Z` as something a person reads. */
-const clockOf = (iso: string): string =>
-  new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-
 export function App() {
+  const { t, locale } = useLanguage();
+
+  /** `2026-08-26T02:30:00.000Z` as something a person reads, in the language they chose. */
+  const clockOf = (iso: string): string =>
+    new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+
   const [opened, setOpened] = useState<Opened | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
-  const [refused, setRefused] = useState<string | null>(null);
+  const [failed, setFailed] = useState<MessageRef | null>(null);
+  const [refused, setRefused] = useState<Refusal | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
-  const [saveFailure, setSaveFailure] = useState<string | null>(null);
+  const [saveFailure, setSaveFailure] = useState<MessageRef | null>(null);
   const [chosen, setChosen] = useState<Xref | null>(null);
   const recordRef = useRef<HTMLElement | null>(null);
   /* The exact document last written back to a file. Documents are immutable and structurally
@@ -79,7 +83,7 @@ export function App() {
         setOpened({
           id: newTreeId(),
           name: file.name,
-          history: begin(doc, `Opened ${file.name}`),
+          history: begin(doc, ref('command.opened', { name: file.name })),
           issues,
         });
         setChosen(null);
@@ -89,7 +93,11 @@ export function App() {
       })
       .catch((error: unknown) => {
         // Never silently: a file that will not open has to say so, and say why.
-        setFailed(error instanceof Error ? error.message : String(error));
+        setFailed(
+          ref('notices.readFailed', {
+            detail: error instanceof Error ? error.message : String(error),
+          }),
+        );
       });
   }, []);
 
@@ -141,11 +149,13 @@ export function App() {
       setSaveFailure(null);
       setSaved(null);
 
-      void handOver(file)
+      /* The dialog's own label is the one place the operating system reads our words back to the
+         user, so it is rendered here rather than left as a reference `handOver` cannot resolve. */
+      void handOver({ ...file, kind: t(file.kind) })
         .then((result) => {
           if (result.outcome === 'cancelled') return;
           if (result.outcome === 'failed') {
-            setSaveFailure(result.problem);
+            setSaveFailure(ref('notices.writeFailed', { detail: result.problem }));
             return;
           }
           setExported(document_);
@@ -154,10 +164,14 @@ export function App() {
         .catch((error: unknown) => {
           // `handOver` answers rather than throws, so this is the unforeseen kind. It still
           // reaches the screen: a save that quietly did nothing is the worst outcome here.
-          setSaveFailure(error instanceof Error ? error.message : String(error));
+          setSaveFailure(
+            ref('notices.writeFailed', {
+              detail: error instanceof Error ? error.message : String(error),
+            }),
+          );
         });
     },
-    [opened],
+    [opened, t],
   );
 
   const doc = opened?.history.present.doc;
@@ -205,13 +219,13 @@ export function App() {
         .reopen(id)
         .then((stored) => {
           if (stored === undefined) {
-            setFailed('That tree is no longer in this browser.');
+            setFailed(ref('app.treeGone'));
             return;
           }
           setOpened({
             id: stored.id,
             name: stored.name,
-            history: begin(stored.doc, `Reopened ${stored.name}`),
+            history: begin(stored.doc, ref('command.reopened', { name: stored.name })),
             issues: [],
           });
           setChosen(null);
@@ -221,7 +235,11 @@ export function App() {
           setExported(null);
         })
         .catch((error: unknown) => {
-          setFailed(error instanceof Error ? error.message : String(error));
+          setFailed(
+            ref('notices.readFailed', {
+              detail: error instanceof Error ? error.message : String(error),
+            }),
+          );
         });
     },
     [store],
@@ -291,9 +309,11 @@ export function App() {
   const findings: readonly AuditFinding[] = doc === undefined ? [] : audit(doc);
   const warnings = findings.filter((finding) => finding.severity === 'warning');
 
-  const keptLine =
-    keptSummary({ ...unsaved, savedAt: store.savedAt }) +
-    (store.savedAt !== null && !store.pending ? ` at ${clockOf(store.savedAt)}` : '');
+  const keptLine = keptSummary({
+    ...unsaved,
+    savedAt: store.savedAt,
+    ...(store.savedAt !== null && !store.pending ? { clock: clockOf(store.savedAt) } : {}),
+  });
 
   return (
     <main className="shell">
@@ -340,7 +360,7 @@ export function App() {
               /* Focusable programmatically but not a tab stop of its own: the panel is where
                  focus is put, and Tab from there goes to its first field. */
               tabIndex={-1}
-              aria-label="Record"
+              aria-label={t('app.record')}
             >
               {doc.families.some((family) => family.xref === chosen) ? (
                 <UnionPanel doc={doc} xref={chosen} run={run} onSelect={setChosen} />
@@ -354,7 +374,7 @@ export function App() {
                   setChosen(null);
                 }}
               >
-                Close
+                {t('app.close')}
               </button>
             </aside>
           )}

@@ -9,18 +9,17 @@
  * for them the whole screen is a door with no handle. So the offer is made in as many words,
  * beside the file picker rather than buried under it.
  *
- * The kept-trees list is the reason the wording here is careful. A list of trees "in this browser" invites
- * the reading that they have been saved somewhere, so the note under it says plainly that nothing
- * has been sent anywhere and nothing has been written back to the files they came from -- which
- * are the two things a user would otherwise assume in opposite directions.
+ * The kept-trees list is the reason the wording here is careful. A list of trees "in this browser"
+ * invites the reading that they have been saved somewhere, so the note under it says plainly that
+ * nothing has been sent anywhere and nothing has been written back to the files they came from --
+ * which are the two things a user would otherwise assume in opposite directions.
+ *
+ * **Dates follow the chosen language, not the browser's.** These used to be formatted with an
+ * `undefined` locale, which asks the browser what it prefers. Once a user can pick a language that
+ * becomes a way of showing Catalan prose over an English date, so the choice is passed explicitly.
  */
+import { useLanguage } from '../i18n/context.js';
 import type { TreeSummary } from '../storage/repository.js';
-
-/** `2026-08-26T02:30:00.000Z` as something a person reads. */
-const clockOf = (iso: string): string =>
-  new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-
-const dayOf = (iso: string): string => new Date(iso).toLocaleDateString();
 
 export interface EmptyScreenProps {
   readonly stored: readonly TreeSummary[];
@@ -31,33 +30,30 @@ export interface EmptyScreenProps {
 }
 
 export function EmptyScreen({ stored, onResume, onForget, onStartFresh }: EmptyScreenProps) {
+  const { t, locale } = useLanguage();
+
+  /** `2026-08-26T02:30:00.000Z` as something a person reads, in the language they chose. */
+  const clockOf = (iso: string): string =>
+    new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  const dayOf = (iso: string): string => new Date(iso).toLocaleDateString(locale);
+
   return (
     <section className="empty">
-      <p className="tagline">
-        Open a GEDCOM file to see the family drawn. 5.5.1 and 7 are both read, in the encoding
-        the file declares.
-      </p>
-      <p className="privacy">Your file is parsed in this browser and never uploaded.</p>
+      <p className="tagline">{t('empty.tagline')}</p>
+      <p className="privacy">{t('empty.privacy')}</p>
 
       <section className="fresh">
-        <h2>No file to open?</h2>
-        <p className="fresh-note">
-          Start an empty tree and type what you know. It begins with one person; partners,
-          parents and children are added from there. When you are ready, the save buttons hand
-          you a real GEDCOM file you can take anywhere.
-        </p>
+        <h2>{t('empty.freshHeading')}</h2>
+        <p className="fresh-note">{t('empty.freshNote')}</p>
         <button type="button" className="start-fresh" onClick={onStartFresh}>
-          Start a new tree
+          {t('empty.startFresh')}
         </button>
       </section>
 
       {stored.length === 0 ? null : (
         <section className="kept-trees">
-          <h2>In this browser</h2>
-          <p className="kept-note">
-            Trees you have opened before, kept on this device. Nothing here has been sent
-            anywhere, and nothing here has been written back to the files they came from.
-          </p>
+          <h2>{t('empty.keptHeading')}</h2>
+          <p className="kept-note">{t('empty.keptNote')}</p>
           <ul>
             {stored.map((tree) => (
               <li key={tree.id}>
@@ -71,18 +67,22 @@ export function EmptyScreen({ stored, onResume, onForget, onStartFresh }: EmptyS
                   {tree.name}
                 </button>
                 <span className="kept-detail">
-                  {tree.people} people, {tree.families} families · {dayOf(tree.savedAt)}{' '}
-                  {clockOf(tree.savedAt)}
+                  {t('empty.keptDetail', {
+                    people: t('bar.people', { count: tree.people }),
+                    families: t('bar.families', { count: tree.families }),
+                    day: dayOf(tree.savedAt),
+                    clock: clockOf(tree.savedAt),
+                  })}
                 </span>
                 <button
                   type="button"
                   className="forget"
-                  title={`Forget ${tree.name}. The file it came from is not touched.`}
+                  title={t('empty.forgetTitle', { name: tree.name })}
                   onClick={() => {
                     onForget(tree.id);
                   }}
                 >
-                  Forget
+                  {t('empty.forget')}
                 </button>
               </li>
             ))}

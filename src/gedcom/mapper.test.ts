@@ -12,6 +12,12 @@ import { describe, expect, it } from 'vitest';
 import { importGedcom, toDocument } from './mapper.js';
 import { parseGedcom } from './parse.js';
 import { validateDoc } from '../model/validate.js';
+import { makeTranslate } from '../i18n/catalog.js';
+import { EN } from '../i18n/keys.js';
+
+/* These suites assert English prose. The catalog is asked for it explicitly rather than
+   through a provider, so a change of default language never silently rewrites them. */
+const say = makeTranslate('en', EN);
 
 const map = (text: string) => toDocument(parseGedcom(text).records);
 
@@ -36,7 +42,7 @@ describe('the header', () => {
     const { doc, issues } = map('0 HEAD\n1 CHAR ANSEL\n0 TRLR\n');
     expect(doc.origin?.dialect).toBe('5.5.1');
     expect(doc.origin?.dialectInferred).toBe(true);
-    expect(issues.some((i) => /version/i.test(i.message))).toBe(true);
+    expect(issues.some((i) => /version/i.test(say(i.message)))).toBe(true);
   });
 
   it('reads the source system and its parts', () => {
@@ -184,7 +190,7 @@ describe('records as a whole', () => {
 
   it('reports a record with no identifier that is not HEAD or TRLR', () => {
     const { issues } = map(`${HEAD7}0 SOUR\n`);
-    expect(issues.some((i) => /identifier/i.test(i.message))).toBe(true);
+    expect(issues.some((i) => /identifier/i.test(say(i.message)))).toBe(true);
   });
 
   it('produces a document that satisfies the schema', () => {
