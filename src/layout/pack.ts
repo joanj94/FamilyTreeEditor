@@ -25,6 +25,7 @@
  * without any of the placement being touched.
  */
 import { GEOMETRY } from './geometry.js';
+import { widthOf, type Widths } from './widths.js';
 import { childrenOf, spousesOf, unionsOf, type Relations } from './relations.js';
 import type { Blocks } from './blocks.js';
 import type { Xref } from '../model/types.js';
@@ -133,14 +134,20 @@ export function pack(
   relations: Relations,
   collapsed: ReadonlySet<Xref> = new Set(),
   order?: BlockOrder,
+  widths: Widths = new Map(),
 ): Packing {
   const left = new Map<Xref, number>();
   const visible = new Set<Xref>();
   const cursor = new Map<number, number>();
 
+  /* A block is as wide as the boxes in it, which are no longer all one width: a member with a
+     long name widens their own box and therefore the block around it. Everything below is the
+     same arithmetic it always was, over a sum instead of a product. */
   const width = (anchor: Xref): number => {
-    const count = (blocks.members.get(anchor) ?? []).length;
-    return count * GEOMETRY.nodeW + (count - 1) * GEOMETRY.gapX;
+    const people = blocks.members.get(anchor) ?? [];
+    if (people.length === 0) return 0;
+    const boxes = people.reduce((total, person) => total + widthOf(widths, person), 0);
+    return boxes + (people.length - 1) * GEOMETRY.gapX;
   };
 
   /* Cached because `shift` walks the same subtree again on every push, and because an order that
@@ -207,6 +214,7 @@ export function pack(
 export function spread(
   blocks: Blocks,
   packing: Packing,
+  widths: Widths = new Map(),
 ): {
   readonly positions: ReadonlyMap<Xref, Point>;
   readonly centres: ReadonlyMap<Xref, number>;
@@ -214,17 +222,22 @@ export function spread(
   const positions = new Map<Xref, Point>();
   for (const [anchor, people] of blocks.members) {
     if (!packing.visible.has(anchor)) continue;
-    const anchorLeft = packing.left.get(anchor) ?? 0;
-    people.forEach((person, slot) => {
+    /* Walked rather than indexed: with boxes of different widths a person's slot is where the
+       ones before them ended, not their position times a constant. */
+    let cursor = packing.left.get(anchor) ?? 0;
+    for (const person of people) {
       positions.set(person, {
-        x: anchorLeft + slot * (GEOMETRY.nodeW + GEOMETRY.gapX),
+        x: cursor,
         y: (blocks.personDepth.get(person) ?? 0) * GEOMETRY.rowH,
       });
-    });
+      cursor += widthOf(widths, person) + GEOMETRY.gapX;
+    }
   }
 
   const centres = new Map<Xref, number>();
-  for (const [person, at] of positions) centres.set(person, at.x + GEOMETRY.nodeW / 2);
+  for (const [person, at] of positions) {
+    centres.set(person, at.x + widthOf(widths, person) / 2);
+  }
   return { positions, centres };
 }
 

@@ -114,6 +114,41 @@ describe('mounting', () => {
     expect(container.querySelector('.person > title')?.textContent).toBe('GivenA SurnameB');
   });
 
+  it('draws a long name whole, in a box that grew to hold it', () => {
+    // The complaint: a box of one fixed width cut the long names off, and half a surname on a
+    // genealogy chart is read as a wrong record rather than as a narrow box.
+    const long = 'GivenLongish GivenSecond SurnameLonger';
+    mount(
+      <Chart
+        doc={{
+          ...doc,
+          individuals: doc.individuals.map((individual) =>
+            individual.xref === '@I1@'
+              ? {
+                  ...individual,
+                  names: [{ value: 'GivenLongish GivenSecond /SurnameLonger/' }],
+                }
+              : individual,
+          ),
+        }}
+      />,
+    );
+    const names = [...container.querySelectorAll('.person .name')].map(
+      (node) => node.textContent,
+    );
+    expect(names).toContain(long);
+
+    const drawn = [...container.querySelectorAll('.person')].find(
+      (node) => node.querySelector('.name')?.textContent === long,
+    );
+    const others = [...container.querySelectorAll('.person .box')]
+      .map((node) => Number(node.getAttribute('width')))
+      .filter((width) => width !== Number(drawn?.querySelector('.box')?.getAttribute('width')));
+    expect(Number(drawn?.querySelector('.box')?.getAttribute('width'))).toBeGreaterThan(
+      Math.max(...others),
+    );
+  });
+
   it('draws no path containing NaN', () => {
     // SVG drops such a path silently, so the failure is a missing connector rather than an error.
     mount(<Chart doc={doc} />);

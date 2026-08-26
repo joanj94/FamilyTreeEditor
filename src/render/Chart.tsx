@@ -48,13 +48,6 @@ export interface ChartProps {
 /** Where the chart opens. Close enough to read, far enough to see a family at once. */
 const OPENS_AT: Viewport = { scale: 0.75, tx: 40, ty: 90 };
 
-/** How much of a name fits in a box before it has to be cut. The full name stays in a title. */
-const NAME_FIT = 20;
-
-function shorten(text: string): string {
-  return text.length <= NAME_FIT ? text : `${text.slice(0, NAME_FIT - 1)}…`;
-}
-
 export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<Xref>>(() => new Set<Xref>());
 
@@ -252,7 +245,7 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
                 rx={4}
               />
               <text className="name" x={person.x + person.width / 2} y={person.y + 24}>
-                {shorten(person.name)}
+                {person.label}
               </text>
               {person.years === '' ? null : (
                 <text className="years" x={person.x + person.width / 2} y={person.y + 42}>

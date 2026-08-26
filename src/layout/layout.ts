@@ -19,12 +19,14 @@ import { buildBlocks, depths, type Blocks } from './blocks.js';
 import { orderBlocks } from './ordering.js';
 import { pack, placeUnions, spread, type Point, type UnionPlacement } from './pack.js';
 import { readRelations, type Relations } from './relations.js';
+import { personWidths, type Widths } from './widths.js';
 import type { GedcomDoc, Xref } from '../model/types.js';
 
 export { GEOMETRY, type Geometry } from './geometry.js';
 export { type Point, type UnionPlacement } from './pack.js';
 export { type Relations } from './relations.js';
 export { type Blocks } from './blocks.js';
+export { type Widths } from './widths.js';
 
 /** A block as the renderer sees it: who is in it, what it owns, which row it is on. */
 export interface BlockView {
@@ -43,6 +45,13 @@ export interface Layout {
   readonly depth: ReadonlyMap<Xref, number>;
   /** Person to the top-left corner of their box. */
   readonly positions: ReadonlyMap<Xref, Point>;
+  /**
+   * Person to the width of their box, which is the width of the name in it.
+   *
+   * Carried on the layout because the renderer must draw the box the pack made room for. A box
+   * drawn at any other width would either clip its name or overlap its neighbour.
+   */
+  readonly widths: Widths;
   /** Person to the horizontal centre of their box, which is what connectors join. */
   readonly centres: ReadonlyMap<Xref, number>;
   readonly unions: ReadonlyMap<Xref, UnionPlacement>;
@@ -63,11 +72,20 @@ export function computeLayout(doc: GedcomDoc, options: LayoutOptions = {}): Layo
   const relations = readRelations(doc);
   const groups = buildBlocks(relations, depths(relations));
   const depth = groups.personDepth;
+  /* Measured before anything is placed: a box is as wide as its name, so every width below --
+     a block's, a row's, the whole drawing's -- is built up from these. */
+  const widths = personWidths(doc);
   /* Who sits next to whom is chosen before anything is placed. The pack's arithmetic is
      untouched by it: it centres and pushes right exactly as before, over a different order. */
-  const packing = pack(groups, relations, collapsed, orderBlocks(groups, relations, collapsed));
+  const packing = pack(
+    groups,
+    relations,
+    collapsed,
+    orderBlocks(groups, relations, collapsed),
+    widths,
+  );
   const { visible } = packing;
-  const { positions, centres } = spread(groups, packing);
+  const { positions, centres } = spread(groups, packing, widths);
 
   const blocks = [...groups.members.keys()]
     .filter((anchor) => visible.has(anchor))
@@ -88,6 +106,7 @@ export function computeLayout(doc: GedcomDoc, options: LayoutOptions = {}): Layo
     roots: groups.roots,
     depth: personDepth,
     positions,
+    widths,
     centres,
     unions: placeUnions(relations, depth, centres, collapsed),
     relations,

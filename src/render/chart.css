@@ -60,10 +60,13 @@
 }
 
 .person .name {
+  /* `GEOMETRY.nameSize`. The boxes are measured at this size and sized to fit, so a size set
+     here that the geometry does not know about draws names wider than the boxes made for them. */
   font-size: 15px;
 }
 
 .person .years {
+  /* `GEOMETRY.yearsSize`, for the same reason. */
   font-size: 12px;
   fill: var(--chart-text-dim, #6f665c);
 }

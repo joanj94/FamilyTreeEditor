@@ -9,9 +9,16 @@
  * A port of `drawLinks` and `drawUnions` from the companion viewer, minus the DOM.
  */
 import { GEOMETRY, type Layout } from '../layout/layout.js';
+import { fitText } from '../layout/text.js';
+import { widthOf } from '../layout/widths.js';
 import { childrenOf, spousesOf } from '../layout/relations.js';
 import { ortho } from './ortho.js';
-import type { GedcomDoc, Individual, Sex, Xref } from '../model/types.js';
+import { displayName, displayYears } from '../model/labels.js';
+import type { GedcomDoc, Sex, Xref } from '../model/types.js';
+
+/* The chart's reading of a record is shared with the layout, which sizes the boxes from it. Kept
+   exported here as well: the scene is where a caller looks for what a box says. */
+export { displayName, displayYears } from '../model/labels.js';
 
 /** A person's box. */
 export interface PersonBox {
@@ -20,7 +27,16 @@ export interface PersonBox {
   readonly y: number;
   readonly width: number;
   readonly height: number;
+  /** The whole name, for the title and the accessible label. */
   readonly name: string;
+  /**
+   * What is drawn in the box.
+   *
+   * The same as `name` except for a name past the widest box the chart will draw, which is cut
+   * here rather than in the component -- the scene is where what a box says is decided, and it is
+   * the only place that can be asserted without mounting anything.
+   */
+  readonly label: string;
   /** Birth and death years, where the record gives them. */
   readonly years: string;
   readonly sex?: Sex;
@@ -68,38 +84,6 @@ export interface Scene {
   readonly bounds: Bounds;
 }
 
-/**
- * What a box says.
- *
- * The `NAME` payload is authoritative and already carries the whole name, with the surname
- * delimited by slashes; the pieces beside it are this tool's reading of it. So the payload is what
- * is drawn, with the delimiters taken out. A person with no name at all is drawn under their
- * identifier rather than as an empty box, because an empty box cannot be clicked with confidence.
- */
-export function displayName(individual: Individual): string {
-  const written = individual.names?.[0];
-  const value = written?.value?.replace(/\//g, '').replace(/\s+/g, ' ').trim();
-  if (value !== undefined && value !== '') return value;
-
-  const pieces = [...(written?.given ?? []), ...(written?.surname ?? [])].join(' ').trim();
-  return pieces === '' ? individual.xref : pieces;
-}
-
-/** The years under the name: birth and death, where the record gives them. */
-export function displayYears(individual: Individual): string {
-  const year = (tag: 'BIRT' | 'DEAT'): string => {
-    const event = individual.events?.find((candidate) => candidate.tag === tag);
-    const parsed = event?.date?.start?.year;
-    if (parsed !== undefined) return String(parsed);
-    /* An unparsed date still has its payload, and a reader would rather see it than nothing. */
-    return event?.date?.value ?? '';
-  };
-  const born = year('BIRT');
-  const died = year('DEAT');
-  if (born === '' && died === '') return '';
-  return `${born}–${died}`;
-}
-
 /** Everyone below a union, however deep, counted once. */
 function descendantsOf(layout: Layout, family: Xref): number {
   const seen = new Set<Xref>();
@@ -145,13 +129,18 @@ export function buildScene(
 
   const persons = [...layout.positions].map<PersonBox>(([id, at]) => {
     const individual = byXref.get(id);
+    const name = individual === undefined ? id : displayName(individual);
+    /* The width the pack made room for, so the box drawn is the box its neighbours were placed
+       around. */
+    const width = widthOf(layout.widths, id);
     return {
       id,
       x: at.x,
       y: at.y,
-      width: GEOMETRY.nodeW,
+      width,
       height: GEOMETRY.nodeH,
-      name: individual === undefined ? id : displayName(individual),
+      name,
+      label: fitText(name, width - 2 * GEOMETRY.nodePadX, GEOMETRY.nameSize),
       years: individual === undefined ? '' : displayYears(individual),
       ...(individual?.sex === undefined ? {} : { sex: individual.sex }),
     };

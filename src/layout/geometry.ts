@@ -13,6 +13,10 @@
 /** The geometry a layout was computed with, carried in its result. */
 export interface Geometry {
   readonly nodeW: number;
+  readonly nodeMaxW: number;
+  readonly nodePadX: number;
+  readonly nameSize: number;
+  readonly yearsSize: number;
   readonly nodeH: number;
   readonly rowH: number;
   readonly gapX: number;
@@ -30,8 +34,36 @@ export interface Geometry {
 }
 
 export const GEOMETRY: Geometry = {
-  /** A person's box. */
+  /**
+   * A person's box, at its narrowest.
+   *
+   * A box is as wide as the name inside it, so this is the floor rather than the width: short
+   * names all draw at 150 and the chart keeps the even column it has always had, and only a name
+   * that would not fit pushes its own box wider. Boxes that were all one width cut the long names
+   * off, and a half-written surname on a genealogy chart is read as a wrong record rather than as
+   * a narrow box.
+   */
   nodeW: 150,
+  /**
+   * The widest a box will grow.
+   *
+   * Not a taste limit but a runaway guard: it is set past the longest name a person actually
+   * carries -- around fifty characters, which is a double-barrelled surname behind three given
+   * names -- so that what a reader meets in a real file is drawn whole. What it stops is a
+   * `NAME` payload holding a paragraph, which would otherwise stretch its row and push the
+   * family it belongs to off the screen. Past this the name is cut with an ellipsis, as every
+   * name used to be, and the whole of it stays in the box's title.
+   */
+  nodeMaxW: 420,
+  /** The air either side of the name inside its box. */
+  nodePadX: 14,
+  /**
+   * The two type sizes in a box. They live here, next to the widths that are computed from them,
+   * and `chart.css` is written to match: a stylesheet that disagreed with these would draw names
+   * wider than the boxes measured for them.
+   */
+  nameSize: 15,
+  yearsSize: 12,
   nodeH: 58,
   /** One generation to the next. What is left over after `nodeH` is where the connectors run. */
   rowH: 200,

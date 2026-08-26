@@ -25,6 +25,7 @@ import { describe, expect, it } from 'vitest';
 import { GEOMETRY, computeLayout, type Layout } from './layout.js';
 import { connectorSegments, crossingPairs } from './crossings.js';
 import { childrenOf, spousesOf } from './relations.js';
+import { widthOf } from './widths.js';
 import type { Family, GedcomDoc, Individual, Xref } from '../model/types.js';
 
 /** How far the port may drift from the oracle before it counts as a change. Measured drift is 0. */
@@ -195,7 +196,10 @@ function invariants(chart: Layout): void {
         const sorted = [...row].sort((a, b) => a.x - b.x);
         sorted.forEach((box, index) => {
           const before = sorted[index - 1];
-          if (before !== undefined && box.x < before.x + GEOMETRY.nodeW) {
+          /* Each box's own width, not one width for all of them: a long name widens its box, and
+             an invariant measured against the narrowest box would stop seeing the overlaps it
+             exists to catch. */
+          if (before !== undefined && box.x < before.x + widthOf(chart.widths, before.who)) {
             clashes.push([before.who, box.who]);
           }
         });

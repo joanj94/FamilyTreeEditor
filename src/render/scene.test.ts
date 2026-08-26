@@ -12,7 +12,8 @@ import { describe, expect, it } from 'vitest';
 import { buildScene, displayName, displayYears } from './scene.js';
 import { ortho } from './ortho.js';
 import { connectorSegments, type PathPoint } from '../layout/crossings.js';
-import { computeLayout } from '../layout/layout.js';
+import { GEOMETRY, computeLayout } from '../layout/layout.js';
+import { measureText } from '../layout/text.js';
 import type { Family, GedcomDoc, Individual, Xref } from '../model/types.js';
 
 interface Union {
@@ -65,6 +66,39 @@ const household = tree(
 
 const scened = (doc: GedcomDoc, collapsed = new Set<Xref>()) =>
   buildScene(doc, computeLayout(doc, { collapsed }), collapsed);
+
+describe('a box the size of its name', () => {
+  const long = 'GivenLongish GivenSecond /SurnameLonger/';
+
+  it('gives a long name a box wide enough to hold it', () => {
+    const wide = tree(
+      { '@I1@': { names: [{ value: long }] }, '@I2@': { names: [{ value: 'A /B/' }] } },
+      { '@F1@': { spouses: ['@I1@', '@I2@'], children: [] } },
+    );
+    const [small, big] = [...scened(wide).persons].sort(
+      (left, right) => left.width - right.width,
+    );
+    expect(big?.width).toBeGreaterThan(small?.width ?? 0);
+    expect(measureText(big?.label ?? '', GEOMETRY.nameSize)).toBeLessThanOrEqual(
+      (big?.width ?? 0) - 2 * GEOMETRY.nodePadX,
+    );
+  });
+
+  it('draws a long name whole rather than cutting it', () => {
+    // The complaint this answers: a surname cut in half reads as a wrong record, not as a narrow
+    // box.
+    const scene = scened(tree({ '@I1@': { names: [{ value: long }] } }, {}));
+    expect(scene.persons[0]?.label).toBe('GivenLongish GivenSecond SurnameLonger');
+  });
+
+  it('cuts only a name past the widest box the chart will draw, and keeps it whole in `name`', () => {
+    const absurd = `${'Wolfgang '.repeat(9)}/Fitzwilliam/`;
+    const box = scened(tree({ '@I1@': { names: [{ value: absurd }] } }, {})).persons[0];
+    expect(box?.width).toBe(GEOMETRY.nodeMaxW);
+    expect(box?.label.endsWith('…')).toBe(true);
+    expect(box?.name).toBe(absurd.replace('/', '').replace('/', ''));
+  });
+});
 
 describe('what a box says', () => {
   it('draws the name the file wrote, without the surname delimiters', () => {
