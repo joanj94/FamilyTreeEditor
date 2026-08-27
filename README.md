@@ -38,6 +38,15 @@ the page is the whole program.
   from the whole tree rather than numbered off the drawing, so a couple share a row however far
   back their two lines run, and giving somebody on the fifth generation a father puts him on the
   fourth.
+- **Prints it, at whatever size of paper it actually needs.** A family tree is the wrong shape for
+  a sheet of paper, and the size on screen says nothing about the size on paper — so the chart is
+  measured and the smallest sheet its names stay readable on is suggested, from A4 up to A0. The
+  whole chart can be fitted to one sheet, tiled at full size across a grid of ordinary sheets that
+  overlap by 10 mm and are numbered for taping together, or laid out as **one continuous page for a
+  roll**, which is what a plotter or a copy shop actually prints on. Every consequence is stated
+  before anything is printed: the page size, the number of sheets, the finished size of the drawing
+  and — the one that decides whether it was worth printing — how many millimetres tall a name will
+  be. What is printed is the chart as it is on screen, folds and all.
 - **Edits persons and unions** through a command stack with undo and redo. Every edit produces a
   new document rather than mutating the old one, and the result stays schema-valid and audit-clean
   or the command does not apply.
@@ -103,7 +112,7 @@ failed, so a single push reports every problem rather than one per round trip.
 | `src/gedcom/`  | Lexer, parse tree, 5.5.1 and 7 dialect mappers, serializers, encoding detection |
 | `src/model/`   | `GedcomDoc` types, ajv validation, `audit()`, xref allocation, immutable ops    |
 | `src/layout/`  | Pure function: document to coordinates. Zero DOM                                |
-| `src/render/`  | SVG drawing, pan/zoom, fold, hit-testing. Reads the ViewModel, decides nothing  |
+| `src/render/`  | SVG drawing, pan/zoom, fold, hit-testing, paper sizing and printing             |
 | `src/editor/`  | React UI, command pattern, undo/redo, forms, validation surfacing               |
 | `src/storage/` | `TreeRepository` interface + IndexedDB implementation, the backend seam         |
 | `src/i18n/`    | Message catalogs, lookup and plurals, language negotiation, the React provider  |

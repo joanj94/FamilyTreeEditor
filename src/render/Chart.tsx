@@ -21,7 +21,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import { GEOMETRY, computeLayout } from '../layout/layout.js';
-import { GUTTER, buildScene, displayXref, type Connector } from './scene.js';
+import { GUTTER, buildScene, displayXref, type Bounds, type Connector } from './scene.js';
 import { useT } from '../i18n/context.js';
 import {
   beginDrag,
@@ -63,6 +63,16 @@ export interface ChartProps {
    * search box, and searching for the same person twice really should centre on them twice.
    */
   readonly reveal?: { readonly xref: Xref } | null;
+  /**
+   * What the drawing occupies, raised whenever it changes.
+   *
+   * The chart's own state decides this -- folding a branch away really does make the chart
+   * smaller -- so it is reported outwards rather than recomputed by whoever needs it. Today that
+   * is the print chooser, which cannot suggest a size of paper without knowing how big the thing
+   * being printed actually is, and would otherwise have to rebuild the scene to find out and get
+   * a different answer from the one on screen.
+   */
+  readonly onExtent?: (bounds: Bounds) => void;
 }
 
 /** How far out the chart opens. Close enough to read, far enough to see a family at once. */
@@ -84,6 +94,7 @@ export function Chart({
   onSelectUnion,
   lineage = null,
   reveal = null,
+  onExtent,
 }: ChartProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<Xref>>(() => new Set<Xref>());
   /* The last reveal that has been acted on, so a prop that has not changed is not acted on twice.
@@ -98,6 +109,12 @@ export function Chart({
     () => buildScene(doc, layout, t, collapsed),
     [doc, layout, t, collapsed],
   );
+
+  /* An effect rather than a call during the render: this tells somebody else about the scene, and
+     a render that reaches outside itself is the thing effects exist to keep out of the render. */
+  useEffect(() => {
+    onExtent?.(scene.bounds);
+  }, [scene, onExtent]);
 
   /**
    * Somebody who has been asked for, but is folded away, is unfolded to.

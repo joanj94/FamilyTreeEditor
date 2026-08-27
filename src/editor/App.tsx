@@ -35,6 +35,7 @@ import { Bar, type SaveFormat } from './Bar.js';
 import { EmptyScreen } from './EmptyScreen.js';
 import { Find } from './Find.js';
 import { Notices, type Saved } from './Notices.js';
+import { Print } from './Print.js';
 import { PersonPanel } from './PersonPanel.js';
 import { handOver } from './handOver.js';
 import { prepareDownload } from './save.js';
@@ -45,6 +46,7 @@ import { useTreeStore } from './persistence.js';
 import { hasUnwrittenWork, keptSummary } from './unsaved.js';
 import { begin, redo, undo, type History } from './history.js';
 import { newTreeId } from '../storage/repository.js';
+import type { Bounds } from '../render/scene.js';
 import type { GedcomDoc, Xref } from '../model/types.js';
 
 interface Opened {
@@ -73,6 +75,10 @@ export function App() {
      identifier -- searching twice for the same person should arrive twice. See `Chart.reveal`. */
   const [revealed, setRevealed] = useState<{ readonly xref: Xref } | null>(null);
   const recordRef = useRef<HTMLElement | null>(null);
+  /* What the chart currently occupies, raised by the chart itself -- the folds are its state, and
+     a folded chart really is a smaller drawing. The print chooser suggests a size of paper from
+     it, so it has to be the extent of what is on screen rather than of the whole document. */
+  const [extent, setExtent] = useState<Bounds | null>(null);
   /* The exact document last written back to a file. Documents are immutable and structurally
      shared, so comparing by reference answers "has anything changed since?" precisely -- and an
      undo back to the state that was exported correctly stops counting as unwritten. */
@@ -363,6 +369,7 @@ export function App() {
         families={doc?.families.length ?? 0}
         warnings={warnings.length}
         search={doc === undefined ? null : <Find doc={doc} onPick={goTo} />}
+        print={doc === undefined ? null : <Print bounds={extent} />}
         kept={keptLine}
         notWrittenBack={doc !== exported}
         onStep={step}
@@ -393,6 +400,7 @@ export function App() {
               onSelectUnion={setChosen}
               lineage={lineage}
               reveal={revealed}
+              onExtent={setExtent}
             />
           </div>
           {chosen === null ? null : (

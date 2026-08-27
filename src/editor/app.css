@@ -508,3 +508,210 @@ button.link {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+
+/*
+ * The print chooser.
+ *
+ * Laid out like the search box under it: the button sits in the strip, and the panel is absolutely
+ * positioned over the chart rather than in the flow. In the flow it would push the strip taller
+ * the moment it opened and shove the whole chart down the screen -- for a panel that closes again
+ * as soon as the reader has printed.
+ *
+ * The button is deliberately the loudest thing in the strip after "Open". Printing a family tree
+ * is one of the two reasons a genealogist opens one of these at all, and a print button that has
+ * to be hunted for is a print button that does not exist.
+ */
+.printing {
+  position: relative;
+}
+
+.print-open {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.print-open:disabled {
+  border-color: color-mix(in srgb, var(--fg) 25%, transparent);
+  color: var(--muted);
+  cursor: default;
+}
+
+.print-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.print-options {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 26rem;
+  max-width: 90vw;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--fg) 18%, transparent);
+}
+
+.print-options label {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.print-options label span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.print-options select {
+  flex: 1 1 auto;
+  max-width: 17rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+  border-radius: 0.3rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+/* What the plan costs, in one line. Set as the panel's own statement rather than as a note: it is
+   the answer to the question the reader opened the panel to ask. */
+.print-summary {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.print-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* A chart printed too small to read is the failure this whole panel exists to prevent, so it is
+   said in the one colour nothing else in the strip uses. */
+.print-warn {
+  margin: 0;
+  color: crimson;
+  font-size: 0.8rem;
+}
+
+.print-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.3rem 0 0;
+}
+
+.print-actions button {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.print-actions .print-go {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/*
+ * The printout itself.
+ *
+ * It is built outside React and appended to the body for the duration of a print -- see
+ * `render/print.ts` -- so on screen it must be nothing at all, and on paper it must be everything.
+ *
+ * `body > *:not(.printout)` is what does the second half: the editor, its strip, its panels and
+ * the interactive chart are all screen and none of them belong on the page. What is left is a
+ * stack of pages, each already the exact size of the paper asked for in the `@page` rule that is
+ * injected alongside it.
+ */
+.printout {
+  display: none;
+}
+
+@media print {
+  html,
+  body {
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    background: #fff;
+  }
+
+  body > *:not(.printout) {
+    display: none !important;
+  }
+
+  .printout {
+    display: block;
+    /* The chart's boxes and its lit line are fills, and a browser that drops backgrounds to save
+       ink would print a genealogy chart with the sexes and the selected line silently removed. */
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    font-family:
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      Roboto,
+      sans-serif;
+  }
+
+  .print-page {
+    display: block;
+    overflow: hidden;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  /* No blank sheet at the end of the job. */
+  .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .print-sheet {
+    display: block;
+  }
+}
+
+/* The paper, drawn rather than assumed: a reader with a dark browser theme still prints on white,
+   and a page whose ground was left transparent prints the boxes and none of what they sit on. */
+.print-paper {
+  fill: #fff;
+}
+
+/* Where the sheets were meant to meet. Faint, because it is an instruction to whoever is taping
+   them together and not part of the family -- and because it is cut off in the act of using it. */
+.print-trim {
+  fill: none;
+  stroke: #b9b2a6;
+  stroke-width: 0.2;
+  stroke-dasharray: 3 2;
+}
+
+.print-tag {
+  fill: #6f665c;
+  font-size: 3.2px;
+  text-anchor: middle;
+}

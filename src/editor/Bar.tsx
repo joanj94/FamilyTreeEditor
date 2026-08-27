@@ -44,6 +44,13 @@ export interface BarProps {
    * would make the bar a thing that reads records, which is the shell's job and not the strip's.
    */
   readonly search?: ReactNode;
+  /**
+   * The print chooser, or nothing where there is no chart to print.
+   *
+   * A slot for the same reason `search` is one: what a chart costs on paper is decided from the
+   * drawing, and a strip that knows the document only as two counts has no business computing it.
+   */
+  readonly print?: ReactNode;
   /** Where this document has got to, in words. See `unsaved.ts`. */
   readonly kept: MessageRef;
   /** True where the document on screen differs from the one last written to a file. */
@@ -66,6 +73,7 @@ export function Bar({
   families,
   warnings,
   search = null,
+  print = null,
   kept,
   notWrittenBack,
   onStep,
@@ -116,6 +124,7 @@ export function Bar({
       </label>
 
       {search}
+      {print}
 
       {opened === null ? null : (
         <>
