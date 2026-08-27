@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/joanj94/FamilyTreeEditor/schema/gedcom7.schema.json",
   "title": "GEDCOM 7 family tree document",
-  "description": "The JSON form of a FamilySearch GEDCOM 7.0 dataset. Structure, tag names, enumerations and date grammar mirror the standard, so that a document here and the .ged file it came from describe the same thing in the same terms. Structures this schema does not model are preserved verbatim under 'extensions' rather than dropped, which is what makes a round trip lossless by construction.",
+  "description": "The JSON form of a FamilySearch GEDCOM 7.0 dataset. This encoding is defined by this project and by this file: GEDCOM 7 normatively specifies only the line-based .ged serialization and GEDZIP, so there is no standard JSON form to follow and this is not one. Structure, tag names, enumerations and date grammar mirror the standard, so that a document here and the .ged file it came from describe the same thing in the same terms. Structures this schema does not model are preserved verbatim under 'extensions' rather than dropped, which is what makes a round trip lossless by construction.",
   "type": "object",
   "required": ["header", "individuals", "families"],
   "additionalProperties": false,

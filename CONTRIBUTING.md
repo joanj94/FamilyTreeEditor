@@ -16,7 +16,8 @@ including the ones that only appear in a comment.
 
 ## Getting set up
 
-Requires Node >= 20.19 and [pnpm](https://pnpm.io).
+Requires Node >= 20.19 and [pnpm](https://pnpm.io). CI runs on Node 22, which is the version to
+match if something passes locally and fails there.
 
 ```bash
 pnpm install
@@ -29,7 +30,9 @@ pnpm dev            # http://localhost:5173
 pnpm typecheck && pnpm lint && pnpm format:check && pnpm test
 ```
 
-That is exactly what CI runs. `pnpm format` fixes formatting in place.
+That is what CI runs, and it runs `pnpm build` after them. Every step runs even where an earlier
+one failed, so one push reports every problem rather than one per round trip. `pnpm format` fixes
+formatting in place.
 
 ## What the tests are for
 
@@ -47,17 +50,33 @@ New behaviour comes with tests. Not because of a coverage number, but because th
 here are silent: a dropped tag or a mis-decoded character does not throw, it just quietly changes
 somebody's file.
 
-## The layering rule
+## The layering rules
 
 ```
-layout/  never imports from render/, editor/, storage/ or gedcom/
-render/  never mutates the document
+layout/            imports from model/ only -- never render/, editor/, storage/, gedcom/ or React
+render/            never imports editor/, and never reaches model/ops: it decides nothing
+gedcom/, model/,   never import React, render/ or editor/. They may name a message through
+storage/           i18n/keys, but not touch the provider that renders it
 ```
 
 This is enforced by `no-restricted-imports` in [`eslint.config.js`](eslint.config.js) rather than
 left to review, because a single convenience import is all it takes to lose it and it looks
 harmless in a diff. Keeping `layout/` free of the DOM is what lets its geometric invariants be
 asserted as ordinary unit tests with no browser at all.
+
+## Adding a string
+
+Every sentence the interface shows is a key resolved through `src/i18n/`, and `en.json` is more
+than the English catalog: `MessageKey` is derived from it, so a key that is not in there is a
+compiler error rather than a blank space on somebody's screen.
+
+Write the English first, then the Catalan and Spanish beside it. `src/i18n/catalog.test.ts` holds
+the three files to the same set of keys, the same plural bases, and the same placeholders in each
+sentence, so a translation left behind fails the suite rather than reaching a reader as a raw key.
+The layers below the UI do not translate anything: `model/` and `gedcom/` report a `MessageRef`
+-- a key and its parameters -- and the UI resolves it in whatever language is on. That is how an
+audit finding or an export note reaches a reader in Catalan without `audit()` knowing Catalan
+exists.
 
 ## Style
 

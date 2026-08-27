@@ -6,9 +6,12 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import prettier from 'eslint-config-prettier';
 
 /**
- * The layering rule is enforced here rather than left to review.
+ * The layering rules are enforced here rather than left to review.
  *
- * `layout/` never imports from `render/` or `editor/`, and `render/` never mutates the document.
+ * Three rules, in the groups below. `layout/` imports from `model/` and nothing else, React
+ * included; `render/` reads the ViewModel and never reaches `model/ops`; and `gedcom/`, `model/`
+ * and `storage/` stay clear of React and of the UI, so each can be tested and reused without one.
+ *
  * That separation is what turns a layout fault -- easily misreported as a data error -- into an
  * ordinary unit test that needs no browser and no DOM. A single convenience import from
  * `layout/` into `render/` is all it takes to lose that, and it is the kind of change that looks
@@ -25,7 +28,7 @@ const layering = [
             {
               group: ['**/render/**', '**/editor/**', '**/storage/**', '**/gedcom/**'],
               message:
-                'layout/ is a pure function from document to coordinates. It may import from model/ only - keeping it free of the DOM is what makes the seven geometric invariants testable without a browser.',
+                'layout/ is a pure function from document to coordinates. It may import from model/ only - keeping it free of the DOM is what makes its geometric invariants testable without a browser.',
             },
             {
               group: ['react', 'react-dom', 'react/*', 'react-dom/*'],

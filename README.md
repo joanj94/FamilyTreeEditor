@@ -6,6 +6,9 @@ A browser-based editor for GEDCOM family trees, including those exported from
 Open a `.ged` file, see the family drawn correctly, change it, and write it back out.
 Free, open source, and entirely client-side.
 
+**[Open the editor](https://joanj94.github.io/FamilyTreeEditor/)** — there is nothing to install:
+the page is the whole program.
+
 > **Your file is parsed in your browser and never uploaded.** There is no server, no account and
 > no telemetry. Genealogy files describe living people, so this is a design constraint rather
 > than a promise made after the fact.
@@ -28,7 +31,9 @@ Free, open source, and entirely client-side.
   their record, so exporting a file you imported does not silently discard the parts this editor
   has no opinion about.
 - **Draws the family as a tidy tree** in SVG — pan, zoom, and fold a branch to collapse it. Unions
-  are drawn as their own nodes, so remarriage renders as what it is.
+  are drawn as their own nodes, so remarriage renders as what it is, numbered in the order the
+  marriages happened. A box carries its person's sex, and a dagger where the record gives a death.
+  Every box, union and fold control is reachable and operable from the keyboard.
 - **Edits persons and unions** through a command stack with undo and redo. Every edit produces a
   new document rather than mutating the old one, and the result stays schema-valid and audit-clean
   or the command does not apply.
@@ -36,7 +41,12 @@ Free, open source, and entirely client-side.
   opening screen. That is not the same as writing your `.ged` back — a web page cannot do that, only
   you can, by taking the file the save buttons hand you — so the two are named differently
   everywhere, and closing the tab with changes you have not written out asks first.
-- **Writes GEDCOM 7 by default and 5.5.1 on request**, alongside the JSON form of the document.
+- **Speaks English, Catalan and Spanish.** The language is whichever one the browser asked for
+  until the reader picks another, and that choice is remembered. English is always loaded
+  underneath, so a translation that has fallen behind shows an English sentence rather than a raw
+  key, and only the chosen language is ever downloaded.
+- **Writes GEDCOM 7 by default and 5.5.1 on request**, alongside the JSON form of the document —
+  which is this project's own encoding, not an interchange format, for the reason set out below.
   `import(export(import(f)))` equals `import(f)` for every fixture, for an edited document, and for
   a few hundred generated ones: a round trip is not allowed to lose anything anyone said about the
   family. Two things are the writer's own and not copied from the document — the version the file
@@ -60,23 +70,28 @@ pnpm dev            # http://localhost:5173
 ```bash
 pnpm typecheck      # tsc -b across src, tests and vite.config.ts
 pnpm lint           # ESLint, including the module layering rules
-pnpm format         # Prettier, in place
+pnpm format:check   # Prettier, reporting only — `pnpm format` fixes in place
 pnpm test           # Vitest
 pnpm build          # production bundle into dist/
 ```
 
-`pnpm typecheck && pnpm lint && pnpm test` is what CI runs on every pull request.
+CI runs all five on every pull request, on Node 22. Each step runs even where an earlier one
+failed, so a single push reports every problem rather than one per round trip.
 
 ## Architecture
 
 ```
   .ged file -> lexer -> parse tree -> dialect mapper -> GedcomDoc <-> editor commands
   (5.5.1|7)  (lines)   (level/tag/    (5.5.1 -> 7)     (GEDCOM 7)    (undo/redo stack)
-                        xref/value)          |
-  .json file ------------ validate (ajv) --> |
+                        xref/value)          |                              |
+  .json file ------------ validate (ajv) --> |                              v
+                                             |                        TreeRepository
+                                             |                        (IndexedDB autosave)
                                              +--> layout() -> ViewModel -> SVG
                                              |
                                              +--> serializer -> .ged (7 | 5.5.1) + .json
+
+  Every sentence the interface shows is a key looked up in i18n/, in en, ca or es.
 ```
 
 | Module         | Responsibility                                                                  |
@@ -87,11 +102,21 @@ pnpm build          # production bundle into dist/
 | `src/render/`  | SVG drawing, pan/zoom, fold, hit-testing. Reads the ViewModel, decides nothing  |
 | `src/editor/`  | React UI, command pattern, undo/redo, forms, validation surfacing               |
 | `src/storage/` | `TreeRepository` interface + IndexedDB implementation, the backend seam         |
+| `src/i18n/`    | Message catalogs, lookup and plurals, language negotiation, the React provider  |
 
-**The layering rule that matters:** `layout/` never imports from `render/` or `editor/`, and
-`render/` never mutates the document. This is enforced by `no-restricted-imports` rules in
-[`eslint.config.js`](eslint.config.js), not left to review. Keeping layout free of the DOM is what
-lets its geometric invariants be asserted as ordinary unit tests with no browser at all.
+**The layering rules that matter**, all three enforced by `no-restricted-imports` in
+[`eslint.config.js`](eslint.config.js) rather than left to review:
+
+- `layout/` may import from `model/` and nothing else — not `render/`, `editor/`, `storage/` or
+  `gedcom/`, and not React. It is a pure function from document to coordinates.
+- `render/` may not import from `editor/`, and may not reach `model/ops` at all: it reads the
+  ViewModel and raises events, and the document is changed by a command or not at all.
+- `gedcom/`, `model/` and `storage/` may not import React, `render/` or `editor/`, so each can be
+  tested and reused without a UI. They may name a message through `i18n/keys`, but not touch the
+  provider that renders it.
+
+Keeping layout free of the DOM is what lets its geometric invariants be asserted as ordinary unit
+tests with no browser at all.
 
 ## The contract
 
@@ -101,6 +126,16 @@ enumerations, the cross-reference grammar and the date grammar are the standard'
 project's: where GEDCOM says `BIRT`, so does the document; where it allows `SURN` more than once,
 so does the document. Nothing sits between the file on disk and the model in memory to translate,
 so there is nowhere for a mapping to quietly lose something.
+
+**The JSON encoding is this project's own.** GEDCOM 7 normatively defines two serializations and
+neither of them is JSON: the line-based `.ged` stream, and GEDZIP for bundling a dataset with its
+media files. So what **Save JSON** writes is the standard's _vocabulary_ — its tags, its
+enumerations, its cross-reference and date grammars — arranged in a shape this repository defines
+and this schema describes. No other program is expected to read it, and it is not
+[GEDCOM X](https://gedcomx.org), which is a separate FamilySearch project with a different data
+model that happens to have a JSON form. The `.ged` file is what you hand to other software; the
+JSON is this editor's document exactly as it holds it, which makes it the useful one for diffing
+an edit, scripting against a tree, or handing the state to something else you wrote.
 
 Four properties are load-bearing:
 
