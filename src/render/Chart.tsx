@@ -20,11 +20,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
-import { computeLayout } from '../layout/layout.js';
-import { GUTTER, buildScene, displayXref } from './scene.js';
+import { GEOMETRY, computeLayout } from '../layout/layout.js';
+import { GUTTER, buildScene, displayXref, type Connector } from './scene.js';
 import { useT } from '../i18n/context.js';
 import {
   beginDrag,
+  centreOn,
   controlScale,
   dragTo,
   endedInDrag,
@@ -35,6 +36,7 @@ import {
   type Gesture,
   type Viewport,
 } from './interaction.js';
+import type { Lineage } from '../model/lineage.js';
 import type { GedcomDoc, Xref } from '../model/types.js';
 
 import './chart.css';
@@ -44,6 +46,23 @@ export interface ChartProps {
   /** Raised when a person is chosen. The chart selects nothing itself; that is the editor's. */
   readonly onSelectPerson?: (xref: Xref) => void;
   readonly onSelectUnion?: (xref: Xref) => void;
+  /**
+   * The selected person's line, drawn in bold. Null draws the chart plain.
+   *
+   * Computed by the editor rather than here, for the reason every other decision about *what is
+   * true* is: `render/` reads a ViewModel and decides nothing. See `model/lineage.ts`.
+   */
+  readonly lineage?: Lineage | null;
+  /**
+   * Somebody to bring into view, wrapped so that asking twice is two askings.
+   *
+   * **The object identity is the signal, not the identifier.** Panning the chart to whatever is
+   * selected would be intolerable -- every click on a box would drag the drawing out from under
+   * the hand that clicked it -- so this is deliberately not the selection. The editor sets a
+   * fresh object only when the reader has asked to be taken somewhere, which today means the
+   * search box, and searching for the same person twice really should centre on them twice.
+   */
+  readonly reveal?: { readonly xref: Xref } | null;
 }
 
 /** How far out the chart opens. Close enough to read, far enough to see a family at once. */
@@ -59,8 +78,17 @@ const OPENS_AT_SCALE = 0.75;
  */
 const OPENS_AT: Viewport = { scale: OPENS_AT_SCALE, tx: 40 + GUTTER * OPENS_AT_SCALE, ty: 90 };
 
-export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
+export function Chart({
+  doc,
+  onSelectPerson,
+  onSelectUnion,
+  lineage = null,
+  reveal = null,
+}: ChartProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<Xref>>(() => new Set<Xref>());
+  /* The last reveal that has been acted on, so a prop that has not changed is not acted on twice.
+     See the block below the layout, which is where it is used. */
+  const [answered, setAnswered] = useState<ChartProps['reveal']>(null);
   const t = useT();
 
   const layout = useMemo(() => computeLayout(doc, { collapsed }), [doc, collapsed]);
@@ -70,6 +98,25 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
     () => buildScene(doc, layout, t, collapsed),
     [doc, layout, t, collapsed],
   );
+
+  /**
+   * Somebody who has been asked for, but is folded away, is unfolded to.
+   *
+   * A person inside a collapsed branch has no position, so there is nowhere to pan to -- and a
+   * search that silently did nothing would be the worst possible answer, since the reader has
+   * just been told this person exists. So the folds come off, and the pan below happens on the
+   * layout that comes back.
+   *
+   * **Adjusted during the render rather than in an effect**, which is React's own answer to "a
+   * prop changed and some state has to change with it": the re-render happens before anything is
+   * painted, so the reader never sees the folded chart flash past on the way to the unfolded one.
+   * Doing it in an effect is the cascading-render mistake the lint rules refuse, and it would
+   * show.
+   */
+  if (reveal !== null && reveal !== answered) {
+    setAnswered(reveal);
+    if (!layout.positions.has(reveal.xref) && collapsed.size > 0) setCollapsed(new Set<Xref>());
+  }
 
   const stageRef = useRef<SVGSVGElement | null>(null);
   const sceneRef = useRef<SVGGElement | null>(null);
@@ -180,6 +227,31 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
   }, [layout, apply]);
 
   /**
+   * Take the reader to somebody they asked for.
+   *
+   * A layout effect rather than an effect, so the chart is already at the person on the frame it
+   * first draws them: done afterwards, the reader sees the old view for a frame and the chart
+   * jumps, which reads as a glitch rather than as an answer.
+   *
+   * It runs again whenever the layout changes, which is how a reveal into a folded branch lands:
+   * the block above takes the folds off, and the position exists on the pass after that. Somebody
+   * with no position even then is genuinely not drawn, and nothing moves.
+   */
+  useLayoutEffect(() => {
+    if (reveal === null) return;
+    const at = layout.positions.get(reveal.xref);
+    const stage = stageRef.current;
+    if (at === undefined || stage === null) return;
+    const box = stage.getBoundingClientRect();
+    view.current = centreOn(
+      view.current,
+      { x: layout.centres.get(reveal.xref) ?? at.x, y: at.y + GEOMETRY.nodeH / 2 },
+      box,
+    );
+    apply();
+  }, [reveal, layout, apply]);
+
+  /**
    * Whether a click is a choice or the tail of a pan.
    *
    * Judged against the click's own `pointerdown`. Releasing the mouse after panning should not
@@ -216,6 +288,19 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
       event.stopPropagation();
       act();
     };
+
+  /**
+   * Whether a run is part of the selected person's line.
+   *
+   * Both its ends have to be: the union it leaves and, where it has one, the person it reaches.
+   * Without the second half every sibling's descent out of a lit parent family would light up
+   * too, and a chart that draws your brothers as your ancestors is worse than one that draws
+   * nothing.
+   */
+  const inLine = (connector: Connector): boolean =>
+    lineage !== null &&
+    lineage.families.has(connector.family) &&
+    (connector.person === undefined || lineage.people.has(connector.person));
 
   return (
     <svg
@@ -255,9 +340,20 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
           ))}
         </g>
 
+        {/* Two layers, the line's own drawn second. SVG paints in document order and the runs
+            are one list, so in a single group an ordinary connector that happens to come later
+            crosses the bold one and cuts a notch out of it -- which on a genealogy chart reads as
+            a relationship that does not connect. */}
         <g className="links">
-          {scene.connectors.map((connector) => (
-            <path key={connector.id} className={`link ${connector.kind}`} d={connector.d} />
+          {scene.connectors
+            .filter((connector) => !inLine(connector))
+            .map((connector) => (
+              <path key={connector.id} className={`link ${connector.kind}`} d={connector.d} />
+            ))}
+        </g>
+        <g className="links">
+          {scene.connectors.filter(inLine).map((connector) => (
+            <path key={connector.id} className={`link ${connector.kind} lit`} d={connector.d} />
           ))}
         </g>
 
@@ -265,13 +361,27 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
           {scene.persons.map((person) => (
             <g
               key={person.id}
-              className={`person${person.sex === undefined ? '' : ` sex-${person.sex}`}`}
+              className={[
+                'person',
+                person.sex === undefined ? '' : `sex-${person.sex}`,
+                lineage?.people.has(person.id) === true ? 'lit' : '',
+              ]
+                .filter((part) => part !== '')
+                .join(' ')}
               data-id={person.id}
               role="button"
               tabIndex={0}
               /* Spoken from the caption, not from the marks: ♀ and † are read out as "female
-                 sign" and "dagger", which describes the drawing rather than the person. */
-              aria-label={person.caption}
+                 sign" and "dagger", which describes the drawing rather than the person.
+
+                 The bold is said as well as drawn. A weight is nothing at all to a screen
+                 reader, so the one fact the chart is making of the selection would otherwise
+                 reach only the readers who can see it. */
+              aria-label={
+                lineage?.people.has(person.id) === true
+                  ? `${person.caption}, ${t('chart.inLine')}`
+                  : person.caption
+              }
               onClick={(event) => {
                 if (chose(event)) onSelectPerson?.(person.id);
               }}
@@ -304,7 +414,7 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
           {scene.unions.map((union) => (
             <g key={union.id}>
               <g
-                className="union-node"
+                className={`union-node${lineage?.families.has(union.id) === true ? ' lit' : ''}`}
                 data-id={union.id}
                 role="button"
                 tabIndex={0}

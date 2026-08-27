@@ -185,3 +185,27 @@ export function pinTo(
 export function toScreen(view: Viewport, at: { readonly x: number; readonly y: number }) {
   return { sx: at.x * view.scale + view.tx, sy: at.y * view.scale + view.ty };
 }
+
+/**
+ * Move the chart so a point in the scene sits in the middle of the stage.
+ *
+ * What the search box needs. Selecting somebody the reader cannot see is not finding them: on a
+ * chart wide enough to want a search box at all, the person found is almost never on screen, and
+ * a selection that only opened the record panel would leave the chart showing the same strangers
+ * it was showing before.
+ *
+ * The scale is left alone. Zooming to the person as well is the obvious extra and it is wrong:
+ * the reader chose that zoom, it is how much family they want in view at once, and taking it away
+ * from them to answer a search is a bigger change than they asked for.
+ */
+export function centreOn(
+  view: Viewport,
+  at: { readonly x: number; readonly y: number },
+  stage: { readonly width: number; readonly height: number },
+): Viewport {
+  return {
+    ...view,
+    tx: stage.width / 2 - at.x * view.scale,
+    ty: stage.height / 2 - at.y * view.scale,
+  };
+}

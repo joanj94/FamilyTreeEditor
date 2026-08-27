@@ -21,16 +21,19 @@
  * can, by taking the file the save buttons hand them. So the unload guard asks about the second,
  * never the first, and the wording everywhere keeps them apart.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { importGedcom, type ImportIssue } from '../gedcom/mapper.js';
 
 import { audit, type AuditFinding } from '../model/audit.js';
+import { indexDoc } from '../model/graph.js';
+import { lineageOf } from '../model/lineage.js';
 import { useLanguage } from '../i18n/context.js';
 import { ref, type MessageRef } from '../i18n/keys.js';
 import { Chart } from '../render/Chart.js';
 import { Bar, type SaveFormat } from './Bar.js';
 import { EmptyScreen } from './EmptyScreen.js';
+import { Find } from './Find.js';
 import { Notices, type Saved } from './Notices.js';
 import { PersonPanel } from './PersonPanel.js';
 import { handOver } from './handOver.js';
@@ -65,6 +68,10 @@ export function App() {
   const [saved, setSaved] = useState<Saved | null>(null);
   const [saveFailure, setSaveFailure] = useState<MessageRef | null>(null);
   const [chosen, setChosen] = useState<Xref | null>(null);
+  /* Somebody the reader has asked to be taken to, as opposed to somebody they have merely
+     selected. A fresh object each time, because the chart pans on the identity rather than on the
+     identifier -- searching twice for the same person should arrive twice. See `Chart.reveal`. */
+  const [revealed, setRevealed] = useState<{ readonly xref: Xref } | null>(null);
   const recordRef = useRef<HTMLElement | null>(null);
   /* The exact document last written back to a file. Documents are immutable and structurally
      shared, so comparing by reference answers "has anything changed since?" precisely -- and an
@@ -87,6 +94,7 @@ export function App() {
           issues,
         });
         setChosen(null);
+        setRevealed(null);
         /* The document came off disk this instant, so it matches the file the user still has.
            Leaving this null made the unload guard fire on every session, with zero edits. */
         setExported(doc);
@@ -205,6 +213,7 @@ export function App() {
       issues: [],
     });
     setChosen(first);
+    setRevealed(null);
     setExported(null);
   }, []);
 
@@ -229,6 +238,7 @@ export function App() {
             issues: [],
           });
           setChosen(null);
+          setRevealed(null);
           /* Deliberately not `setExported(stored.doc)`: the autosaved edits really were never
              written back to the user's file. That is a true statement about the file rather than
              a danger, so it colours the status line and not the guard -- see `unsaved.ts`. */
@@ -306,6 +316,31 @@ export function App() {
     };
   }, [step]);
 
+  /**
+   * The selected person's line, for the chart to draw in bold.
+   *
+   * Recomputed from the selection rather than held as state of its own, so it cannot fall out of
+   * step with it -- and so an edit that changes who is related to whom is reflected the moment the
+   * document changes, without anything having to remember to refresh it.
+   *
+   * Null where a union is selected: a union is a junction rather than a person, and a line drawn
+   * through both its partners' ancestries at once would light up two families and explain neither.
+   */
+  const index = useMemo(() => (doc === undefined ? null : indexDoc(doc)), [doc]);
+  const lineage = useMemo(
+    () =>
+      index === null || chosen === null || !index.individuals.has(chosen)
+        ? null
+        : lineageOf(index, chosen),
+    [index, chosen],
+  );
+
+  /** Choose somebody found by name: open their record, and take the chart to them. */
+  const goTo = useCallback((xref: Xref) => {
+    setChosen(xref);
+    setRevealed({ xref });
+  }, []);
+
   const findings: readonly AuditFinding[] = doc === undefined ? [] : audit(doc);
   const warnings = findings.filter((finding) => finding.severity === 'warning');
 
@@ -327,6 +362,7 @@ export function App() {
         people={doc?.individuals.length ?? 0}
         families={doc?.families.length ?? 0}
         warnings={warnings.length}
+        search={doc === undefined ? null : <Find doc={doc} onPick={goTo} />}
         kept={keptLine}
         notWrittenBack={doc !== exported}
         onStep={step}
@@ -351,7 +387,13 @@ export function App() {
       ) : (
         <section className="work">
           <div className="stage">
-            <Chart doc={doc} onSelectPerson={setChosen} onSelectUnion={setChosen} />
+            <Chart
+              doc={doc}
+              onSelectPerson={setChosen}
+              onSelectUnion={setChosen}
+              lineage={lineage}
+              reveal={revealed}
+            />
           </div>
           {chosen === null ? null : (
             <aside

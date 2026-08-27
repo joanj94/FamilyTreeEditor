@@ -183,3 +183,45 @@
 .toggle:focus-visible {
   outline: none;
 }
+
+/*
+ * The selected person's line, in bold.
+ *
+ * `lit` is on the boxes above and below the selected person, on the unions the line runs through,
+ * and on the runs between them -- see `model/lineage.ts` for what counts as being in it.
+ *
+ * **Weight first, colour second.** Bold is what distinguishes the line, because weight survives
+ * being zoomed out to where a chart is a texture rather than a set of names, and because it is
+ * the one emphasis that reads the same to somebody who cannot tell the green from the grey. The
+ * colour is a second, redundant signal on top of it rather than the signal itself.
+ *
+ * Nothing is dimmed. Fading the rest of the family would answer the question faster and it would
+ * also be a claim this chart has no business making -- the people not in your line are not less
+ * real, and half of them are on it by marriage. The bold says which; it does not say which matter.
+ */
+.person.lit .box {
+  stroke: var(--chart-lit, #2f6f4f);
+  stroke-width: 2.6;
+}
+
+.person.lit .name {
+  font-weight: 700;
+}
+
+.person.lit .marks {
+  font-weight: 600;
+  fill: var(--chart-text, #2c2822);
+}
+
+/* The dot grows by its own stroke rather than by a radius set here: a radius the scene did not
+   choose is a size nothing else on the chart was placed around. */
+.union-node.lit .union {
+  fill: var(--chart-lit, #2f6f4f);
+  stroke: var(--chart-lit, #2f6f4f);
+  stroke-width: 3;
+}
+
+.link.lit {
+  stroke: var(--chart-lit, #2f6f4f);
+  stroke-width: 2.8;
+}

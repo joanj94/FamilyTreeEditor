@@ -14,6 +14,8 @@
  * English before any of this was translated; `Intl.PluralRules` picks the form, so a language with
  * more than two of them gets the right one without this file knowing which language it is.
  */
+import type { ReactNode } from 'react';
+
 import type { ExportDialect } from '../gedcom/serialize.js';
 import { LOCALES, type LocaleTag } from '../i18n/catalog.js';
 import { useLanguage, useT } from '../i18n/context.js';
@@ -34,6 +36,14 @@ export interface BarProps {
   readonly people: number;
   readonly families: number;
   readonly warnings: number;
+  /**
+   * The search box, or nothing where there is no document to search.
+   *
+   * A slot rather than a `doc` prop: this component draws a strip and knows what is in the
+   * document only as counts. Handing it the whole document so that it could construct one child
+   * would make the bar a thing that reads records, which is the shell's job and not the strip's.
+   */
+  readonly search?: ReactNode;
   /** Where this document has got to, in words. See `unsaved.ts`. */
   readonly kept: MessageRef;
   /** True where the document on screen differs from the one last written to a file. */
@@ -55,6 +65,7 @@ export function Bar({
   people,
   families,
   warnings,
+  search = null,
   kept,
   notWrittenBack,
   onStep,
@@ -103,6 +114,8 @@ export function Bar({
           ))}
         </select>
       </label>
+
+      {search}
 
       {opened === null ? null : (
         <>

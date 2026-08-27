@@ -1,5 +1,5 @@
 {
-  "app.title": "FamilyTreeEditor",
+  "app.title": "3JServeis - Family Tree Editor",
   "app.record": "Ficha",
   "app.close": "Cerrar",
   "app.treeGone": "Ese árbol ya no está en este navegador.",
@@ -32,6 +32,10 @@
   "bar.warnings_many": "{count} de avisos",
   "bar.warnings_other": "{count} avisos",
   "bar.notWrittenBack": "todavía no se ha vuelto a escribir en un archivo",
+
+  "find.label": "Buscar una persona",
+  "find.placeholder": "Buscar por nombre",
+  "find.none": "Nadie con ese nombre.",
 
   "empty.tagline": "Abre un archivo GEDCOM para ver la familia dibujada. Se leen tanto 5.5.1 como 7, con la codificación que declara el archivo.",
   "empty.privacy": "Tu archivo se analiza en este navegador y nunca se sube a ninguna parte.",
@@ -116,6 +120,7 @@
   "chart.showHidden_other": "Mostrar {count} ocultos",
   "chart.fold": "Plegar esta rama",
   "chart.generation": "Generación {n}",
+  "chart.inLine": "en la línea de la persona seleccionada",
 
   "kept.notStoring": "Este navegador no guarda nada, así que este árbol solo dura mientras la pestaña esté abierta.",
   "kept.keeping": "Guardando este árbol en tu navegador…",

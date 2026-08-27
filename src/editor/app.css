@@ -85,6 +85,100 @@ body {
   font-size: 0.9rem;
 }
 
+/*
+ * The search box, and the matches under it.
+ *
+ * `position: relative` on the box and `absolute` on the list is what keeps the list *over* the
+ * chart rather than in the bar. Left in the flow it pushed the strip taller with every keystroke
+ * and shoved the whole chart down the screen, which is a lot of movement to pay for eight rows
+ * that disappear again the moment one is chosen.
+ *
+ * The label is for screen readers only. The placeholder says the same thing to everybody else,
+ * and a bar that already carries a file name, two counts, three save buttons and a language
+ * chooser cannot afford another word of chrome.
+ */
+.find {
+  position: relative;
+}
+
+.find-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.find input {
+  width: 14rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+  border-radius: 0.4rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.find input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.find-results {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: 20rem;
+  max-width: 60vw;
+  margin: 0;
+  padding: 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent);
+  border-radius: 0.4rem;
+  background: var(--bg);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--fg) 20%, transparent);
+  list-style: none;
+}
+
+.find-results li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* The row the arrow keys are on, which is also the row Enter takes. One highlight for both, so
+   the keyboard and the mouse are never pointing at different people. */
+.find-results li.at {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.find-results li.none {
+  color: var(--muted);
+  cursor: default;
+}
+
+.find-results .who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The years, for telling namesakes apart. Quiet: they are how you choose between two rows, not
+   what you are reading the row for. */
+.find-results .when {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .failed {
   margin: 0;
   padding: 0.75rem 1.25rem;

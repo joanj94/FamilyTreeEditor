@@ -137,6 +137,18 @@ export interface Connector {
   readonly id: string;
   readonly d: string;
   readonly kind: 'spouse' | 'descent';
+  /** The union it runs from. */
+  readonly family: Xref;
+  /**
+   * The person at the other end, where it has one.
+   *
+   * Carried rather than left to be read back out of the identifier. The chart draws a line in
+   * bold when both of its ends are in the selected person's lineage, and a renderer that had to
+   * split `@F1@:@I3@` on a colon to learn that would be one `@`-less identifier away from being
+   * wrong -- the standard permits any `@[A-Z0-9_]+@`, and nothing stops a colon-free convention
+   * elsewhere from becoming a colon-bearing one here. A union's own stem has no person.
+   */
+  readonly person?: Xref;
 }
 
 /** The `(n)` beside a child's descent, saying which union they came from. */
@@ -385,6 +397,8 @@ export function buildScene(
       connectors.push({
         id: `${family}:${spouse}`,
         kind: 'spouse',
+        family,
+        person: spouse,
         d: ortho([
           [centre, at.y + GEOMETRY.nodeH],
           [centre, spot.runY],
@@ -402,6 +416,7 @@ export function buildScene(
     connectors.push({
       id: `${family}:stem`,
       kind: 'descent',
+      family,
       d: ortho([
         [spot.x, spot.y],
         [spot.x, spot.stemY],
@@ -420,6 +435,8 @@ export function buildScene(
       connectors.push({
         id: `${family}:${child}`,
         kind: 'descent',
+        family,
+        person: child,
         d: ortho([
           [spot.stemX, spot.barY],
           [centre, spot.barY],

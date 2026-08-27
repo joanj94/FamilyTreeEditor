@@ -1,5 +1,5 @@
 {
-  "app.title": "FamilyTreeEditor",
+  "app.title": "3JServeis - Family Tree Editor",
   "app.record": "Fitxa",
   "app.close": "Tanca",
   "app.treeGone": "Aquest arbre ja no és en aquest navegador.",
@@ -32,6 +32,10 @@
   "bar.warnings_many": "{count} d'avisos",
   "bar.warnings_other": "{count} avisos",
   "bar.notWrittenBack": "encara no s'ha tornat a escriure en un fitxer",
+
+  "find.label": "Cerca una persona",
+  "find.placeholder": "Cerca pel nom",
+  "find.none": "Ningú amb aquest nom.",
 
   "empty.tagline": "Obre un fitxer GEDCOM per veure la família dibuixada. Es llegeixen tant 5.5.1 com 7, amb la codificació que declara el fitxer.",
   "empty.privacy": "El teu fitxer s'analitza en aquest navegador i no es puja mai enlloc.",
@@ -116,6 +120,7 @@
   "chart.showHidden_other": "Mostra {count} d'amagats",
   "chart.fold": "Plega aquesta branca",
   "chart.generation": "Generació {n}",
+  "chart.inLine": "a la línia de la persona seleccionada",
 
   "kept.notStoring": "Aquest navegador no desa res, així que aquest arbre només dura mentre la pestanya és oberta.",
   "kept.keeping": "Desant aquest arbre al teu navegador…",
