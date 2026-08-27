@@ -21,7 +21,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import { computeLayout } from '../layout/layout.js';
-import { buildScene, displayXref } from './scene.js';
+import { GUTTER, buildScene, displayXref } from './scene.js';
 import { useT } from '../i18n/context.js';
 import {
   beginDrag,
@@ -46,8 +46,18 @@ export interface ChartProps {
   readonly onSelectUnion?: (xref: Xref) => void;
 }
 
-/** Where the chart opens. Close enough to read, far enough to see a family at once. */
-const OPENS_AT: Viewport = { scale: 0.75, tx: 40, ty: 90 };
+/** How far out the chart opens. Close enough to read, far enough to see a family at once. */
+const OPENS_AT_SCALE = 0.75;
+
+/**
+ * Where the chart opens.
+ *
+ * The left-hand margin holds the generation number as well as air, so it is measured from the
+ * gutter rather than picked: opened at the plain 40 it always was, the leftmost column of numbers
+ * was drawn off the edge of the stage and only appeared once the reader panned right -- which is
+ * the one direction a reader starting at the top-left of a family has no reason to go.
+ */
+const OPENS_AT: Viewport = { scale: OPENS_AT_SCALE, tx: 40 + GUTTER * OPENS_AT_SCALE, ty: 90 };
 
 export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<Xref>>(() => new Set<Xref>());
@@ -220,6 +230,31 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
       })}
     >
       <g ref={sceneRef}>
+        {/* First, so everything else is drawn over it: this is a scale beside the chart, not part
+            of the family. It sits in the scene group and pans with it -- pinned to the viewport
+            instead, the numbers would slide along the rows and stop naming them the moment the
+            chart was dragged sideways. */}
+        <g className="generations">
+          {scene.generations.map((mark) => (
+            <g key={mark.id}>
+              <text
+                className="generation"
+                x={mark.x}
+                y={mark.y}
+                /* Spoken once. The number is repeated at the other end of the row so a reader who
+                   has panned to the right-hand edge of a wide family can still see it, and a
+                   screen reader saying "Generation 3" twice per row would only be noise. */
+                aria-label={t('chart.generation', { n: mark.generation })}
+              >
+                {mark.generation}
+              </text>
+              <text className="generation at-end" x={mark.rightX} y={mark.y} aria-hidden="true">
+                {mark.generation}
+              </text>
+            </g>
+          ))}
+        </g>
+
         <g className="links">
           {scene.connectors.map((connector) => (
             <path key={connector.id} className={`link ${connector.kind}`} d={connector.d} />

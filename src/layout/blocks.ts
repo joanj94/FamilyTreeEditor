@@ -7,9 +7,10 @@
  * **Depth is the longest path from a root**, not the shortest, so a person sits below both parents
  * even where the two sides of the family run to different lengths.
  *
- * **A person who married in is pulled down to their partner's row.** They have no ancestry, so the
- * first pass puts them at depth 0 -- drawn among the founders, generations above the person they
- * married. Only people without parents move, so a real root stays put.
+ * **Rows are settled, not read straight off that walk.** A couple share a row whichever way their
+ * two lines run, and someone with no ancestry of their own sits directly above their children
+ * rather than up among the founders. Both are pushes downward from the walk's answer, relaxed
+ * together until nothing moves -- see `depths`.
  *
  * **A block is a person plus the spouses they bring in.** Blocks form a plain tree even though the
  * family graph does not, which is what makes a tidy-tree pack possible at all.
@@ -27,12 +28,19 @@ import { childrenOf, spousesOf, unionsOf, type Relations } from './relations.js'
 import type { Xref } from '../model/types.js';
 
 /**
- * The pull-down below converges in two passes on the source chart. The cap only stops a
- * pathological input from spinning; it is not a tuning knob.
+ * The levelling below converges in two passes on the source chart. The cap only stops a
+ * pathological input from spinning; it is not a tuning knob. Nobody can be deeper than the
+ * number of people in the file, so a run still moving after that many passes is not going to
+ * settle.
  */
 const DEPTH_PASSES = 12;
 
-/** Which generation row each person sits on, before blocks are levelled. */
+/**
+ * Which generation row each person sits on, before blocks are levelled.
+ *
+ * Rows are counted from 0 and row 0 is always occupied, so the generation a reader is shown is
+ * simply the row plus one -- see `GENERATIONS_FROM` in the scene.
+ */
 export function depths(relations: Relations): ReadonlyMap<Xref, number> {
   const found = new Map<Xref, number>();
 
@@ -56,22 +64,61 @@ export function depths(relations: Relations): ReadonlyMap<Xref, number> {
 
   for (const person of relations.persons) descend(person, new Set());
 
-  for (let pass = 0; pass < DEPTH_PASSES; pass += 1) {
-    let moved = false;
+  /* Three rules, relaxed together until nothing moves. Every one of them pushes a person *down*
+     and never up, so the settling is monotone: it either converges or runs out of passes, and it
+     cannot cycle between two answers. */
+  let moved = true;
+  const sink = (person: Xref, row: number): void => {
+    if (row <= (found.get(person) ?? 0)) return;
+    found.set(person, row);
+    moved = true;
+  };
+  const passes = Math.max(DEPTH_PASSES, relations.persons.length);
+  for (let pass = 0; pass < passes && moved; pass += 1) {
+    moved = false;
     for (const person of relations.persons) {
-      if (relations.parentFamily.has(person)) continue;
-      let target = found.get(person) ?? 0;
-      for (const family of unionsOf(relations, person)) {
-        for (const spouse of spousesOf(relations, family)) {
-          if (spouse !== person) target = Math.max(target, found.get(spouse) ?? 0);
-        }
+      // Below both parents, which is what `descend` seeded and what has to survive the rest.
+      const born = relations.parentFamily.get(person);
+      if (born !== undefined) {
+        for (const parent of spousesOf(relations, born))
+          sink(person, (found.get(parent) ?? 0) + 1);
       }
-      if (target !== found.get(person)) {
-        found.set(person, target);
-        moved = true;
+
+      /* Level with whoever they married. This used to be for the married-in only, and that is
+         the case it was written for: someone with no ancestry starts at row 0 and has to be
+         pulled down to their partner. But it holds for anyone -- two spouses whose lines run to
+         different lengths were drawn a generation or more apart, joined by a connector crossing
+         the rows between them, and a couple split across two generations is read as a wrong
+         record rather than as a levelling that never happened. */
+      for (const family of unionsOf(relations, person)) {
+        for (const spouse of spousesOf(relations, family)) sink(person, found.get(spouse) ?? 0);
+      }
+
+      /* Someone with no ancestry of their own sits directly above their children, not at the top
+         of the chart. Give a person on the fifth generation a father and he belongs on the
+         fourth: anchored at row 0 instead, he would be drawn among the founders with a four-row
+         connector down to the child he was just added for, and his child -- one below him by the
+         rule above -- would be torn off the generation they were already on. */
+      if (born === undefined) {
+        let highest = Number.POSITIVE_INFINITY;
+        for (const family of unionsOf(relations, person)) {
+          for (const child of childrenOf(relations, family)) {
+            highest = Math.min(highest, found.get(child) ?? 0);
+          }
+        }
+        if (Number.isFinite(highest)) sink(person, highest - 1);
       }
     }
-    if (!moved) break;
+  }
+
+  /* The top generation is row 0. Nothing above pushes every person off it -- whoever is highest
+     has no parents, and the rule that would move them puts them one above their own children --
+     but the chart numbers its generations from this row, so it is made true here rather than
+     argued for at the place that counts them. */
+  let highest = Number.POSITIVE_INFINITY;
+  for (const row of found.values()) highest = Math.min(highest, row);
+  if (Number.isFinite(highest) && highest !== 0) {
+    for (const [person, row] of found) found.set(person, row - highest);
   }
 
   return found;

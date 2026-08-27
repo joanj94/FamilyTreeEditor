@@ -105,6 +105,19 @@ describe('mounting', () => {
     expect(container.querySelectorAll('.union-node')).toHaveLength(1);
   });
 
+  it('numbers the generations down either side of the chart', () => {
+    // Two rows here, each numbered twice -- once at each end, because the chart pans and a reader
+    // who has travelled to the right of a wide family should not have to travel back to find out
+    // which generation they are looking at.
+    mount(<Chart doc={doc} />);
+    const marks = [...container.querySelectorAll('.generation')];
+    expect(marks.map((node) => node.textContent)).toEqual(['1', '1', '2', '2']);
+    // Said once, not twice: the copy on the right is the same fact, and a screen reader repeating
+    // "Generation 2" every row is noise.
+    expect(marks.filter((node) => node.getAttribute('aria-label') !== null)).toHaveLength(2);
+    expect(marks[0]?.getAttribute('aria-label')).toBe('Generation 1');
+  });
+
   it('writes the names into the boxes, with the full name kept in a title', () => {
     mount(<Chart doc={doc} />);
     const names = [...container.querySelectorAll('.person .name')].map(

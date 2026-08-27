@@ -108,6 +108,7 @@
   "chart.showHidden_one": "Show {count} hidden",
   "chart.showHidden_other": "Show {count} hidden",
   "chart.fold": "Fold this branch away",
+  "chart.generation": "Generation {n}",
 
   "kept.notStoring": "This browser is not storing anything, so this tree lasts only as long as the tab.",
   "kept.keeping": "Keeping this tree in your browser…",

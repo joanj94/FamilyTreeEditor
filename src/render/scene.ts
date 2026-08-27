@@ -147,6 +147,33 @@ export interface OrdinalMark {
   readonly text: string;
 }
 
+/**
+ * The generation a row is, written in the margin at either end of it.
+ *
+ * The chart is a grid of rows and nothing on it says how deep a row is: a reader counting
+ * generations has to trace a line of descent up to the founders and count the boxes, and on a
+ * chart wide enough to need panning they lose their place doing it. The number says it outright.
+ *
+ * **Counted from 1 at the top, and re-counted whenever the tree changes shape.** It is the row
+ * plus one, and the top row is row 0 by construction -- see `depths`. Give somebody on the fifth
+ * generation a father and he is drawn on the fourth, because the rows were settled from the whole
+ * tree rather than numbered off the drawing.
+ *
+ * Written at both ends of the row because the chart pans: a reader looking at the right-hand edge
+ * of a wide family should not have to travel back across it to learn which generation they are on.
+ */
+export interface GenerationLabel {
+  readonly id: string;
+  /** What is written: the row plus one, so the founders' row reads as 1. */
+  readonly generation: number;
+  /** The baseline, level with the middle of the boxes on the row. */
+  readonly y: number;
+  /** Where it is written left of the chart. Anchored at its end, so it grows away from the boxes. */
+  readonly x: number;
+  /** And right of it, anchored at its start for the same reason. */
+  readonly rightX: number;
+}
+
 export interface Bounds {
   readonly minX: number;
   readonly minY: number;
@@ -159,6 +186,8 @@ export interface Scene {
   readonly unions: readonly UnionDot[];
   readonly connectors: readonly Connector[];
   readonly ordinals: readonly OrdinalMark[];
+  /** One per row that has anybody on it, top first. */
+  readonly generations: readonly GenerationLabel[];
   readonly bounds: Bounds;
 }
 
@@ -187,6 +216,23 @@ const MARKS_OFFSET = 12;
  */
 const MARKS_DROP = 14;
 
+/**
+ * How far out from the chart's own edge a generation number is written.
+ *
+ * Clear of the widest box on any row, not of the row it labels: the numbers are a column, and a
+ * column that stepped in and out with the shape of each row would read as part of the drawing
+ * rather than as a scale beside it.
+ */
+export const GUTTER = 44;
+
+/**
+ * The number's baseline, measured down from the top of the boxes on its row.
+ *
+ * Level with the middle of a box rather than with the name inside it. It names the whole row, and
+ * a row is as tall as its boxes.
+ */
+const GENERATION_BASELINE = GEOMETRY.nodeH / 2 + 8;
+
 /** Everyone below a union, however deep, counted once. */
 function descendantsOf(layout: Layout, family: Xref): number {
   const seen = new Set<Xref>();
@@ -205,17 +251,56 @@ function descendantsOf(layout: Layout, family: Xref): number {
   return seen.size;
 }
 
-function boundsOf(persons: readonly PersonBox[], unions: readonly UnionDot[]): Bounds {
+/**
+ * A number for every row that has somebody drawn on it.
+ *
+ * Read from the boxes rather than from the whole document, so a folded branch takes its rows'
+ * numbers away with it: a number standing beside an empty band of chart would be naming nothing.
+ * The rows above a fold are untouched, since folding hides descendants and never ancestors.
+ */
+function generationsOf(
+  persons: readonly PersonBox[],
+  layout: Layout,
+): readonly GenerationLabel[] {
+  if (persons.length === 0) return [];
+  const left = Math.min(...persons.map((box) => box.x));
+  const right = Math.max(...persons.map((box) => box.x + box.width));
+  const rows = new Set(persons.map((box) => layout.depth.get(box.id) ?? 0));
+  return [...rows]
+    .sort((first, second) => first - second)
+    .map((row) => ({
+      id: `generation:${String(row)}`,
+      generation: row + 1,
+      y: row * GEOMETRY.rowH + GENERATION_BASELINE,
+      x: left - GUTTER,
+      rightX: right + GUTTER,
+    }));
+}
+
+/**
+ * What the drawing occupies.
+ *
+ * The generation numbers are in it: they are drawn, so a viewport fitted to the bounds has to
+ * hold them. Their own width is not -- like the marks beside a union dot, nothing measures the
+ * text -- but the gutter either side is wider than a number ever is.
+ */
+function boundsOf(
+  persons: readonly PersonBox[],
+  unions: readonly UnionDot[],
+  generations: readonly GenerationLabel[] = [],
+): Bounds {
   if (persons.length === 0 && unions.length === 0) {
     return { minX: 0, minY: 0, width: 0, height: 0 };
   }
   const xs = [
     ...persons.flatMap((box) => [box.x, box.x + box.width]),
     ...unions.map((dot) => dot.x),
+    ...generations.flatMap((mark) => [mark.x, mark.rightX]),
   ];
   const ys = [
     ...persons.flatMap((box) => [box.y, box.y + box.height]),
     ...unions.map((dot) => dot.y),
+    ...generations.map((mark) => mark.y),
   ];
   const minX = Math.min(...xs);
   const minY = Math.min(...ys);
@@ -353,5 +438,13 @@ export function buildScene(
     }
   }
 
-  return { persons, unions, connectors, ordinals, bounds: boundsOf(persons, unions) };
+  const generations = generationsOf(persons, layout);
+  return {
+    persons,
+    unions,
+    connectors,
+    ordinals,
+    generations,
+    bounds: boundsOf(persons, unions, generations),
+  };
 }

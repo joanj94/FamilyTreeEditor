@@ -115,6 +115,7 @@
   "chart.showHidden_many": "Mostra {count} d'amagats",
   "chart.showHidden_other": "Mostra {count} d'amagats",
   "chart.fold": "Plega aquesta branca",
+  "chart.generation": "Generació {n}",
 
   "kept.notStoring": "Aquest navegador no desa res, així que aquest arbre només dura mentre la pestanya és oberta.",
   "kept.keeping": "Desant aquest arbre al teu navegador…",

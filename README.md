@@ -34,6 +34,10 @@ the page is the whole program.
   are drawn as their own nodes, so remarriage renders as what it is, numbered in the order the
   marriages happened. A box carries its person's sex, and a dagger where the record gives a death.
   Every box, union and fold control is reachable and operable from the keyboard.
+- **Numbers the generations** down both margins, counted from 1 at the top. The rows are settled
+  from the whole tree rather than numbered off the drawing, so a couple share a row however far
+  back their two lines run, and giving somebody on the fifth generation a father puts him on the
+  fourth.
 - **Edits persons and unions** through a command stack with undo and redo. Every edit produces a
   new document rather than mutating the old one, and the result stays schema-valid and audit-clean
   or the command does not apply.

@@ -501,6 +501,60 @@ describe('folding', () => {
   });
 });
 
+describe('the generation numbers', () => {
+  const threeDeep = tree(
+    { '@I1@': {}, '@I2@': {}, '@I3@': {}, '@I4@': {}, '@I5@': {} },
+    {
+      '@F1@': { spouses: ['@I1@', '@I2@'], children: ['@I3@'] },
+      '@F2@': { spouses: ['@I3@', '@I4@'], children: ['@I5@'] },
+    },
+  );
+
+  it('numbers the rows from 1 at the top', () => {
+    expect(scened(threeDeep).generations.map((mark) => mark.generation)).toEqual([1, 2, 3]);
+  });
+
+  it('puts each number on its own row', () => {
+    for (const mark of scened(threeDeep).generations) {
+      const row = (mark.generation - 1) * GEOMETRY.rowH;
+      expect(mark.y).toBeGreaterThan(row);
+      expect(mark.y).toBeLessThan(row + GEOMETRY.nodeH);
+    }
+  });
+
+  it('writes it at both ends of the row, clear of every box', () => {
+    const scene = scened(threeDeep);
+    const left = Math.min(...scene.persons.map((box) => box.x));
+    const right = Math.max(...scene.persons.map((box) => box.x + box.width));
+    for (const mark of scene.generations) {
+      expect(mark.x).toBeLessThan(left);
+      expect(mark.rightX).toBeGreaterThan(right);
+    }
+  });
+
+  it('lines the numbers up in a column rather than following the shape of each row', () => {
+    const scene = scened(threeDeep);
+    expect(new Set(scene.generations.map((mark) => mark.x)).size).toBe(1);
+    expect(new Set(scene.generations.map((mark) => mark.rightX)).size).toBe(1);
+  });
+
+  it('takes a row away with the branch that was folded off it', () => {
+    // A number standing beside an empty band of chart names nothing.
+    expect(scened(threeDeep, new Set(['@F2@'])).generations.map((m) => m.generation)).toEqual([
+      1, 2,
+    ]);
+  });
+
+  it('numbers nothing in an empty document', () => {
+    const empty: GedcomDoc = {
+      header: { gedcomVersion: '7.0' },
+      individuals: [],
+      families: [],
+    };
+    expect(scened(empty).generations).toEqual([]);
+  });
+});
+
 describe('the bounds', () => {
   it('cover every box drawn', () => {
     const scene = scened(household);

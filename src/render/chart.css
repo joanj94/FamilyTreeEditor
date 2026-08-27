@@ -110,6 +110,29 @@
   paint-order: stroke fill;
 }
 
+/* The generation number in the margin, at both ends of every row.
+ *
+ * Deliberately quiet: it is a scale beside the drawing, and a number as loud as a name would be
+ * read as one more person on the row. Big enough to stay legible when the chart is zoomed out far
+ * enough that the names have stopped being, since that is exactly when a reader has lost count of
+ * where they are and wants it.
+ *
+ * `.at-end` is the copy on the right-hand side, anchored the other way so both numbers grow away
+ * from the boxes rather than towards them. */
+.generation {
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 600;
+  text-anchor: end;
+  fill: var(--chart-text-faint, #c3b9aa);
+  pointer-events: none;
+  user-select: none;
+}
+
+.generation.at-end {
+  text-anchor: start;
+}
+
 .person,
 .union-node,
 .toggle {

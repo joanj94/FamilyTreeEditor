@@ -88,6 +88,56 @@ describe('generations', () => {
     expect(found.get('@KID@')).toBe(1);
   });
 
+  it('levels a couple whose two lines run to different lengths', () => {
+    // Two spouses who each have ancestry of their own used to keep the row their own line gave
+    // them: one at 2 and one at 1, joined by a connector crossing the generation between them.
+    // A couple split across two rows is read as a wrong record, not as a levelling that never
+    // happened.
+    const doc = tree(['@GRAN@', '@DEEP@', '@HIM@', '@HERDAD@', '@HER@'], {
+      '@F1@': { spouses: ['@GRAN@'], children: ['@DEEP@'] },
+      '@F2@': { spouses: ['@DEEP@'], children: ['@HIM@'] },
+      '@F3@': { spouses: ['@HERDAD@'], children: ['@HER@'] },
+      '@F4@': { spouses: ['@HIM@', '@HER@'], children: [] },
+    });
+    const found = depths(readRelations(doc));
+    expect(found.get('@HIM@')).toBe(2);
+    expect(found.get('@HER@')).toBe(2);
+  });
+
+  it('sits someone with no ancestry directly above their children', () => {
+    // Give a person on the fifth generation a father and he belongs on the fourth. Anchored at
+    // the top of the chart instead, he is drawn among the founders with a four-row connector down
+    // to the child he was added for -- and that child, one row below him by the rule that a
+    // person sits under their parents, is torn off the generation they were already on.
+    const line = {
+      '@FA@': { spouses: ['@A@'], children: ['@B@'] },
+      '@FB@': { spouses: ['@B@'], children: ['@C@'] },
+      '@FC@': { spouses: ['@C@'], children: ['@D@'] },
+      '@FD@': { spouses: ['@D@'], children: ['@FIFTH@'] },
+      '@FE@': { spouses: ['@FIFTH@', '@JOINED@'], children: [] },
+    };
+    const people = ['@A@', '@B@', '@C@', '@D@', '@FIFTH@', '@JOINED@'];
+    const before = depths(readRelations(tree(people, line)));
+    expect(before.get('@FIFTH@')).toBe(4);
+    expect(before.get('@JOINED@')).toBe(4);
+
+    const after = depths(
+      readRelations(
+        tree([...people, '@DAD@', '@MUM@'], {
+          ...line,
+          '@FF@': { spouses: ['@DAD@', '@MUM@'], children: ['@JOINED@'] },
+        }),
+      ),
+    );
+    expect(after.get('@DAD@')).toBe(3);
+    expect(after.get('@MUM@')).toBe(3);
+    // And the person the parents were added for has not moved off their own generation.
+    expect(after.get('@JOINED@')).toBe(4);
+    expect(after.get('@FIFTH@')).toBe(4);
+    // The founders of the line the chart is counted from are still on the top row.
+    expect(Math.min(...after.values())).toBe(0);
+  });
+
   it('does not write the levelled rows back into the depths it was given', () => {
     // Levelling a block onto one row is a fact about the block, not about descent, so it comes
     // back as a new map.

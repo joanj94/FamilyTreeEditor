@@ -115,6 +115,7 @@
   "chart.showHidden_many": "Mostrar {count} de ocultos",
   "chart.showHidden_other": "Mostrar {count} ocultos",
   "chart.fold": "Plegar esta rama",
+  "chart.generation": "Generación {n}",
 
   "kept.notStoring": "Este navegador no guarda nada, así que este árbol solo dura mientras la pestaña esté abierta.",
   "kept.keeping": "Guardando este árbol en tu navegador…",
