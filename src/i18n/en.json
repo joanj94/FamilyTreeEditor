@@ -14,7 +14,7 @@
   "bar.redo": "Redo",
   "bar.save7": "Save GEDCOM 7",
   "bar.save7.title": "GEDCOM 7 carries everything this editor holds",
-  "bar.save551": "Save 5.5.1",
+  "bar.save551": "Save GEDCOM 5.5.1",
   "bar.save551.title": "For a program that cannot read GEDCOM 7. Anything the older version cannot say is reported",
   "bar.saveJson": "Save JSON",
   "bar.saveJson.title": "The document as JSON, in the shape the schema describes",
@@ -55,6 +55,8 @@
   "sexWord.U": "sex undetermined",
   "caption.born": "born {year}",
   "caption.died": "died {year}",
+  "caption.married": "married {year}",
+  "caption.divorced": "divorced {year}",
 
   "person.gone": "That person is no longer here.",
   "person.given": "Given name",

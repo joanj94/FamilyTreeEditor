@@ -3,7 +3,7 @@
  *
  * Five kinds of message, and each is announced rather than merely drawn. They appear in response
  * to something the user did and then sit there silently, which for anybody using a screen reader
- * means they may as well not exist: pressing **Save 5.5.1** and being told nothing about the
+ * means they may as well not exist: pressing **Save GEDCOM 5.5.1** and being told nothing about the
  * `SEX X` that could not be carried is the same experience as an export that lost it quietly.
  *
  * `alert` for the three failures, because a file that would not open, a file that would not be

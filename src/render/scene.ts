@@ -15,7 +15,14 @@ import { childrenOf, spousesOf } from '../layout/relations.js';
 import { ortho } from './ortho.js';
 import { ordinal } from '../layout/pack.js';
 import type { Translate } from '../i18n/keys.js';
-import { displayCaption, displayMarks, displayName, displayXref } from '../model/labels.js';
+import {
+  displayCaption,
+  displayMarks,
+  displayName,
+  displayUnionCaption,
+  displayUnionMarks,
+  displayXref,
+} from '../model/labels.js';
 import type { GedcomDoc, Sex, Xref } from '../model/types.js';
 
 /* The chart's reading of a record is shared with the layout, which sizes the boxes from it. Kept
@@ -24,6 +31,8 @@ export {
   displayCaption,
   displayMarks,
   displayName,
+  displayUnionCaption,
+  displayUnionMarks,
   displayXref,
   displayYears,
 } from '../model/labels.js';
@@ -88,6 +97,34 @@ export interface UnionDot {
    * Every dot on a row shares a height, so every mark on a row still lines up with every other.
    */
   readonly ordinalY: number;
+  /**
+   * What the union itself says: the marriage and the divorce, signed and dated.
+   *
+   * The dot's counterpart to a box's `marks`, and read the same way -- see `displayUnionMarks`.
+   * Empty where the record gives neither, which is most unions in most files.
+   */
+  readonly marks: string;
+  /**
+   * The same facts in words, for the accessible label.
+   *
+   * A screen reader makes "equals" and "not-equals" of the signs, which is the
+   * typography rather than the couple. Signs are for the eye; this is for
+   * the ear.
+   */
+  readonly caption: string;
+  /**
+   * Where that line starts: below the dot and out to its right.
+   *
+   * Not above, which is the ordinal's -- and that one has to stay centred on the dot to name it.
+   * Not on the dot's own baseline, which is where the sideways spouse run passes. Not directly
+   * below either, which is the fold's. What is left is the corner between them, and it is
+   * genuinely empty: see `MARKS_OFFSET` and `MARKS_DROP`.
+   *
+   * Anchored at the start rather than centred: a mark that grew in both directions would reach
+   * for the left-hand partner's drop as readily as the right-hand one's.
+   */
+  readonly marksX: number;
+  readonly marksY: number;
   /** True where the union has children, which is what makes it foldable. */
   readonly foldable: boolean;
   readonly collapsed: boolean;
@@ -128,6 +165,28 @@ export interface Scene {
 /** How far above its dot a union's marriage number is written, clearing the dot's own radius. */
 const MARK_LIFT = 11;
 
+/**
+ * How far right of its dot a union's marks start.
+ *
+ * Past the fold's box as well as the dot: the box is 16 wide on the dot's own centre, so anything
+ * starting inside `x + 8` would be written over the control.
+ */
+const MARKS_OFFSET = 12;
+
+/**
+ * How far below the dot the marks' baseline sits.
+ *
+ * On the dot's own line first, which put them on the sideways run -- a union on the bottom lane
+ * has `runY` equal to its dot's `y`, so the spouse run passes exactly through that baseline, and
+ * the halo that was meant to protect the text from the line instead cut the line in two. A
+ * connector with a bite out of it reads as a relationship that does not connect.
+ *
+ * Below is the free quadrant. Above it are the lane runs, stacked one per marriage on the row;
+ * below there is only the fold's box, which `MARKS_OFFSET` clears sideways, and the descent stem,
+ * which drops on the dot's own centre.
+ */
+const MARKS_DROP = 14;
+
 /** Everyone below a union, however deep, counted once. */
 function descendantsOf(layout: Layout, family: Xref): number {
   const seen = new Set<Xref>();
@@ -166,7 +225,7 @@ function boundsOf(persons: readonly PersonBox[], unions: readonly UnionDot[]): B
 /**
  * Turn a laid-out document into the list of things to draw.
  *
- * `t` is here for one field: `caption`, which is the spoken form of a box and therefore the only
+ * `t` is here for the captions -- the spoken form of a box and of a dot, and therefore the only
  * part of a scene that has a language. Everything else -- names, years, signs, coordinates -- reads
  * the same in every locale, which is why the translator is passed rather than the whole scene
  * being rebuilt per language.
@@ -181,6 +240,9 @@ export function buildScene(
   collapsed: ReadonlySet<Xref> = new Set(),
 ): Scene {
   const byXref = new Map(doc.individuals.map((individual) => [individual.xref, individual]));
+  /* The unions are walked from the layout, which knows where a dot goes and nothing about what it
+     says. The record is what carries the marriage and the divorce. */
+  const familyOf = new Map(doc.families.map((family) => [family.xref, family]));
 
   const persons = [...layout.positions].map<PersonBox>(([id, at]) => {
     const individual = byXref.get(id);
@@ -208,10 +270,15 @@ export function buildScene(
 
   for (const [family, spot] of layout.unions) {
     const foldable = childrenOf(layout.relations, family).length > 0;
+    const record = familyOf.get(family);
     unions.push({
       id: family,
       x: spot.x,
       y: spot.y,
+      marks: record === undefined ? '' : displayUnionMarks(record),
+      caption: record === undefined ? '' : displayUnionCaption(record, t),
+      marksX: spot.x + MARKS_OFFSET,
+      marksY: spot.y + MARKS_DROP,
       /* Read from the relations rather than from the laid-out spot: the spot only carries an
          ordinal where it has children to draw, and a childless or folded remarriage is still the
          second marriage. */

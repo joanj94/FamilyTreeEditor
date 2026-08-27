@@ -207,7 +207,7 @@ describe('saving', () => {
     // 5.5.1 has no SEX value X. The substitution is legitimate and the user is told about it,
     // because it changes what the record asserts about a person.
     await open('invented.ged', SOURCE);
-    press('Save 5.5.1');
+    press('Save GEDCOM 5.5.1');
     await settle();
 
     expect(await textOf(0)).toContain('1 SEX U');
@@ -376,7 +376,7 @@ describe('choosing where the file goes', () => {
 describe('announcements', () => {
   it('announces what an export could not carry', async () => {
     await open('invented.ged', SOURCE);
-    press('Save 5.5.1');
+    press('Save GEDCOM 5.5.1');
     await settle();
 
     const region = container.querySelector('.saved');

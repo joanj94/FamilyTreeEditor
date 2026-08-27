@@ -273,14 +273,18 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
                 data-id={union.id}
                 role="button"
                 tabIndex={0}
-                aria-label={
+                aria-label={[
                   union.ordinal > 0
                     ? t('chart.unionMarriage', {
                         xref: displayXref(union.id),
                         n: union.ordinal,
                       })
-                    : t('chart.union', { xref: displayXref(union.id) })
-                }
+                    : t('chart.union', { xref: displayXref(union.id) }),
+                  // In words, never as the signs the dot is drawn with -- see `caption`.
+                  union.caption,
+                ]
+                  .filter((part) => part !== '')
+                  .join(', ')}
                 onClick={(event) => {
                   if (chose(event)) onSelectUnion?.(union.id);
                 }}
@@ -303,6 +307,13 @@ export function Chart({ doc, onSelectPerson, onSelectUnion }: ChartProps) {
                     {`(${String(union.ordinal)})`}
                   </text>
                 ) : null}
+                {/* What the couple themselves say: `=` and `≠` with the year of each. Beside the dot
+                    rather than under it, because the fold hangs there -- see `marksX`. */}
+                {union.marks === '' ? null : (
+                  <text className="union-marks" x={union.marksX} y={union.marksY}>
+                    {union.marks}
+                  </text>
+                )}
               </g>
 
               {union.foldable ? (

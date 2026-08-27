@@ -14,7 +14,7 @@
   "bar.redo": "Rehacer",
   "bar.save7": "Guardar GEDCOM 7",
   "bar.save7.title": "GEDCOM 7 recoge todo lo que contiene este editor",
-  "bar.save551": "Guardar 5.5.1",
+  "bar.save551": "Guardar GEDCOM 5.5.1",
   "bar.save551.title": "Para un programa que no puede leer GEDCOM 7. Todo lo que la versión antigua no puede expresar se informa",
   "bar.saveJson": "Guardar JSON",
   "bar.saveJson.title": "El documento en JSON, con la forma que describe el esquema",
@@ -59,6 +59,8 @@
   "sexWord.U": "sexo sin determinar",
   "caption.born": "nacido en {year}",
   "caption.died": "fallecido en {year}",
+  "caption.married": "casados en {year}",
+  "caption.divorced": "divorciados en {year}",
 
   "person.gone": "Esa persona ya no está aquí.",
   "person.given": "Nombre",

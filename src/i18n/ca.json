@@ -14,7 +14,7 @@
   "bar.redo": "Refés",
   "bar.save7": "Desa GEDCOM 7",
   "bar.save7.title": "GEDCOM 7 recull tot el que conté aquest editor",
-  "bar.save551": "Desa 5.5.1",
+  "bar.save551": "Desa GEDCOM 5.5.1",
   "bar.save551.title": "Per a un programa que no pot llegir GEDCOM 7. Tot allò que la versió antiga no pot expressar s'informa",
   "bar.saveJson": "Desa JSON",
   "bar.saveJson.title": "El document en JSON, amb la forma que descriu l'esquema",
@@ -59,6 +59,8 @@
   "sexWord.U": "sexe sense determinar",
   "caption.born": "nascut el {year}",
   "caption.died": "mort el {year}",
+  "caption.married": "casats el {year}",
+  "caption.divorced": "divorciats el {year}",
 
   "person.gone": "Aquesta persona ja no hi és.",
   "person.given": "Nom",

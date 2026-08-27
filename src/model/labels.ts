@@ -11,7 +11,7 @@
  * counterpart, and `displayCaption` is what the accessible label is built from.
  */
 import type { MessageKey, Translate } from '../i18n/keys.js';
-import type { Individual, Sex, Xref } from './types.js';
+import type { Family, GenDate, Individual, Sex, Xref } from './types.js';
 
 /**
  * An identifier as a reader should see it.
@@ -69,6 +69,24 @@ export function sexWord(sex: Sex | undefined, t: Translate): string {
 export const DEATH_SIGN = '†';
 
 /**
+ * The signs a union is drawn with: `=` for a marriage, `≠` for a divorce.
+ *
+ * Here for the reason the dagger is: a year beside a dot says when something happened to the
+ * couple, not what. Two dates on one line with nothing to tell them apart is the worst version of
+ * that -- a reader cannot tell a long marriage from a short one followed by thirty years apart.
+ *
+ * **Not ⚭ and ⚮, which is what a genealogist would expect.** Those are the right characters and
+ * they do not survive the drawing: at the size a dot's line is set, both render as the same pair
+ * of small rings, because the slash that distinguishes a divorce is below what the fallback fonts
+ * resolve. Two marks a reader cannot tell apart are worse than none, since they invite a
+ * confident wrong reading. The pedigree-notation pair says the same thing in strokes every font
+ * has -- a couple joined, and a join undone -- and the second is legibly the negation of the
+ * first, which is exactly the relation the two events have.
+ */
+export const MARRIAGE_SIGN = '=';
+export const DIVORCE_SIGN = '≠';
+
+/**
  * What a box says.
  *
  * The `NAME` payload is authoritative and already carries the whole name, with the surname
@@ -85,9 +103,21 @@ export function displayName(individual: Individual): string {
   return pieces === '' ? displayXref(individual.xref) : pieces;
 }
 
+/**
+ * An event as this module reads one: a tag and, where the record gave one, a date.
+ *
+ * Structural rather than `IndividualEvent | FamilyEvent`, because a person's birth and a union's
+ * marriage are read the same way and the reading should not have to know which record it came
+ * from.
+ */
+interface Dated {
+  readonly tag: string;
+  readonly date?: GenDate;
+}
+
 /** The year of one event, as parsed, falling back to the payload the file wrote. */
-function yearOf(individual: Individual, tag: 'BIRT' | 'DEAT'): string {
-  const event = individual.events?.find((candidate) => candidate.tag === tag);
+function yearOf(events: readonly Dated[] | undefined, tag: string): string {
+  const event = events?.find((candidate) => candidate.tag === tag);
   const parsed = event?.date?.start?.year;
   if (parsed !== undefined) return String(parsed);
   /* An unparsed date still has its payload, and a reader would rather see it than nothing. */
@@ -106,8 +136,8 @@ function yearOf(individual: Individual, tag: 'BIRT' | 'DEAT'): string {
  * known and an end is not.
  */
 export function displayYears(individual: Individual): string {
-  const born = yearOf(individual, 'BIRT');
-  const died = yearOf(individual, 'DEAT');
+  const born = yearOf(individual.events, 'BIRT');
+  const died = yearOf(individual.events, 'DEAT');
   if (born === '' && died === '') return '';
   return `${born}–${died}${died === '' ? '' : ` ${DEATH_SIGN}`}`;
 }
@@ -138,8 +168,8 @@ export function displayMarks(individual: Individual): string {
  * `model/` may not reach the UI -- see `eslint.config.js`.
  */
 export function displayCaption(individual: Individual, t: Translate): string {
-  const born = yearOf(individual, 'BIRT');
-  const died = yearOf(individual, 'DEAT');
+  const born = yearOf(individual.events, 'BIRT');
+  const died = yearOf(individual.events, 'DEAT');
   const parts = [
     displayName(individual),
     sexWord(individual.sex, t),
@@ -147,4 +177,43 @@ export function displayCaption(individual: Individual, t: Translate): string {
     died === '' ? '' : t('caption.died', { year: died }),
   ];
   return parts.filter((part) => part !== '').join(', ');
+}
+
+/**
+ * The line beside a union's dot: the marriage, then the divorce, each signed and dated.
+ *
+ * **A sign is drawn only where there is a year to sign**, exactly as the dagger above waits for a
+ * date. An undated `MARR` -- GEDCOM's `1 MARR Y` -- is left to the panel: a lone sign beside a dot
+ * reads as a date the chart has failed to draw rather than as one the record never gave, and a
+ * union is already drawn as a partnership without it.
+ *
+ * Nothing is measured against this. A person's box is sized to what it carries; a dot has no box,
+ * so a long mark is left to run past its dot and is knocked out of whatever it crosses -- see
+ * `.union-marks` in `chart.css`.
+ */
+export function displayUnionMarks(family: Family): string {
+  return [
+    [MARRIAGE_SIGN, yearOf(family.events, 'MARR')] as const,
+    [DIVORCE_SIGN, yearOf(family.events, 'DIV')] as const,
+  ]
+    .filter(([, year]) => year !== '')
+    .map(([sign, year]) => `${sign} ${year}`)
+    .join(' ');
+}
+
+/**
+ * The same facts in words, for the accessible label of a dot.
+ *
+ * "equals 1878, not-equals 1889" is what a screen reader makes of the line above: the typography
+ * rather than the couple. Signs are for the eye; this is for the ear, and it is the same split
+ * `displayMarks` and `displayCaption` make above.
+ */
+export function displayUnionCaption(family: Family, t: Translate): string {
+  const said = (tag: 'MARR' | 'DIV', key: MessageKey): string => {
+    const year = yearOf(family.events, tag);
+    return year === '' ? '' : t(key, { year });
+  };
+  return [said('MARR', 'caption.married'), said('DIV', 'caption.divorced')]
+    .filter((part) => part !== '')
+    .join(', ');
 }

@@ -213,6 +213,48 @@ describe('the marks a box carries', () => {
   });
 });
 
+describe('the marks a union carries', () => {
+  /** The same household, with the partnership dated and ended. */
+  const ended: GedcomDoc = {
+    ...doc,
+    families: doc.families.map((family) => ({
+      ...family,
+      events: [
+        { tag: 'MARR' as const, date: { value: '1902', start: { year: 1902 } } },
+        { tag: 'DIV' as const, date: { value: '1930', start: { year: 1930 } } },
+      ],
+    })),
+  };
+
+  it('draws the marriage and the divorce as signs, so a dot says them at a glance', () => {
+    mount(<Chart doc={ended} />);
+    expect(container.querySelector('.union-marks')?.textContent).toBe('= 1902 ≠ 1930');
+  });
+
+  it('says nothing at a dot whose union records neither', () => {
+    mount(<Chart doc={doc} />);
+    expect(container.querySelectorAll('.union-marks')).toHaveLength(0);
+  });
+
+  it('sets them off the dot, where neither the number, the run nor the fold is', () => {
+    mount(<Chart doc={ended} />);
+    const dot = container.querySelector('.union');
+    const marks = container.querySelector('.union-marks');
+    // Right of the fold's box, and below the baseline the sideways spouse run passes along.
+    expect(Number(marks?.getAttribute('x'))).toBeGreaterThan(
+      Number(dot?.getAttribute('cx')) + 8,
+    );
+    expect(Number(marks?.getAttribute('y'))).toBeGreaterThan(Number(dot?.getAttribute('cy')));
+  });
+
+  it('speaks them as words, since a screen reader reads a glyph as its typography', () => {
+    mount(<Chart doc={ended} />);
+    const spoken = container.querySelector('.union-node')?.getAttribute('aria-label');
+    expect(spoken).toBe('Union F1, married 1902, divorced 1930');
+    expect(spoken).not.toContain('≠');
+  });
+});
+
 describe('which marriage a union is', () => {
   /** One person, married twice: the second union has no children of its own. */
   const remarried: GedcomDoc = {

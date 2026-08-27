@@ -14,6 +14,8 @@ import {
   displayCaption,
   displayMarks,
   displayName,
+  displayUnionCaption,
+  displayUnionMarks,
   displayXref,
   displayYears,
 } from './scene.js';
@@ -21,7 +23,7 @@ import { ortho } from './ortho.js';
 import { connectorSegments, type PathPoint } from '../layout/crossings.js';
 import { GEOMETRY, computeLayout } from '../layout/layout.js';
 import { measureText } from '../layout/text.js';
-import type { Family, GedcomDoc, Individual, Xref } from '../model/types.js';
+import type { Family, FamilyEvent, GedcomDoc, Individual, Xref } from '../model/types.js';
 import { makeTranslate } from '../i18n/catalog.js';
 import { EN } from '../i18n/keys.js';
 
@@ -32,6 +34,8 @@ const say = makeTranslate('en', EN);
 interface Union {
   readonly spouses: readonly Xref[];
   readonly children: readonly Xref[];
+  /** `MARR` and `DIV`, for the marks a dot carries. */
+  readonly events?: readonly FamilyEvent[];
 }
 
 function tree(
@@ -60,6 +64,7 @@ function tree(
       ...(husband === undefined ? {} : { husband }),
       ...(wife === undefined ? {} : { wife }),
       ...(union.children.length > 0 ? { children: union.children } : {}),
+      ...(union.events === undefined ? {} : { events: union.events }),
     };
   });
   return { header: { gedcomVersion: '7.0' }, individuals, families: familyRecords };
@@ -234,6 +239,60 @@ describe('what a box says', () => {
   });
 });
 
+describe('what a union says', () => {
+  const married = (events: readonly FamilyEvent[]): Family => ({ xref: '@F1@', events });
+
+  it('takes the years from the parsed dates and signs each one for what it is', () => {
+    expect(
+      displayUnionMarks(
+        married([
+          { tag: 'MARR', date: { value: '1 JAN 1902', start: { year: 1902 } } },
+          { tag: 'DIV', date: { value: '1 JAN 1930', start: { year: 1930 } } },
+        ]),
+      ),
+    ).toBe('= 1902 ≠ 1930');
+  });
+
+  it('says a marriage on its own where no divorce is recorded', () => {
+    expect(displayUnionMarks(married([{ tag: 'MARR', date: { value: '1902' } }]))).toBe(
+      '= 1902',
+    );
+  });
+
+  it('says nothing for an event the record gives no date for, as the dagger does', () => {
+    /* `1 MARR Y` is a marriage stated without a date. A lone sign beside a dot reads as a date the
+       chart failed to draw rather than as one the record never gave, so it is left to the panel. */
+    expect(displayUnionMarks(married([{ tag: 'MARR', occurred: true }]))).toBe('');
+    expect(displayUnionMarks(married([{ tag: 'DIV', occurred: true }]))).toBe('');
+  });
+
+  it('shows an unparsed date as written rather than showing nothing', () => {
+    expect(
+      displayUnionMarks(married([{ tag: 'MARR', date: { value: 'before the war' } }])),
+    ).toBe('= before the war');
+  });
+
+  it('says nothing where the record gives neither', () => {
+    expect(displayUnionMarks({ xref: '@F1@' })).toBe('');
+    expect(displayUnionMarks(married([{ tag: 'CENS', date: { value: '1910' } }]))).toBe('');
+  });
+
+  it('speaks the same facts in words, because a glyph is read out as its typography', () => {
+    expect(
+      displayUnionCaption(
+        married([
+          { tag: 'MARR', date: { value: '1902', start: { year: 1902 } } },
+          { tag: 'DIV', date: { value: '1930', start: { year: 1930 } } },
+        ]),
+        say,
+      ),
+    ).toBe('married 1902, divorced 1930');
+    // Silent wherever the drawn line is silent, so the two never disagree.
+    expect(displayUnionCaption(married([{ tag: 'DIV', occurred: true }]), say)).toBe('');
+    expect(displayUnionCaption({ xref: '@F1@' }, say)).toBe('');
+  });
+});
+
 describe('the scene', () => {
   it('draws a box for everyone placed and a dot for every union', () => {
     const scene = scened(household);
@@ -362,6 +421,52 @@ describe('the scene', () => {
         .sort(),
     ).toEqual(['(1)', '(2)']);
     expect(scened(household).ordinals).toEqual([]);
+  });
+
+  it('carries the marriage and divorce of a union on its dot', () => {
+    const dated = tree(
+      { '@I1@': {}, '@I2@': {} },
+      {
+        '@F1@': {
+          spouses: ['@I1@', '@I2@'],
+          children: [],
+          events: [
+            { tag: 'MARR', date: { value: '1902', start: { year: 1902 } } },
+            { tag: 'DIV', date: { value: '1930', start: { year: 1930 } } },
+          ],
+        },
+      },
+    );
+    const union = scened(dated).unions[0];
+    expect(union?.marks).toBe('= 1902 ≠ 1930');
+    expect(union?.caption).toBe('married 1902, divorced 1930');
+  });
+
+  it('leaves the marks empty where the union records neither', () => {
+    expect(scened(household).unions.map((union) => union.marks)).toEqual(['']);
+    expect(scened(household).unions.map((union) => union.caption)).toEqual(['']);
+  });
+
+  it('sets the marks below the dot and out to its right, off the run and off the fold', () => {
+    /* Every other side of a dot is spoken for: the ordinal above it, the sideways spouse run
+       through its own baseline, the fold's box directly below. The corner between the last two is
+       what is left, and the offset has to clear the fold's box -- 16 wide on the dot's centre --
+       rather than merely the dot. */
+    const dated = tree(
+      { '@I1@': {}, '@I2@': {}, '@I3@': {} },
+      {
+        '@F1@': {
+          spouses: ['@I1@', '@I2@'],
+          children: ['@I3@'],
+          events: [{ tag: 'MARR', date: { value: '1902' } }],
+        },
+      },
+    );
+    const union = scened(dated).unions[0];
+    // Clear of the fold's box, which is 16 wide and centred on the dot.
+    expect(union?.marksX).toBeGreaterThan((union?.x ?? 0) + 8);
+    // Below the dot's baseline, where the spouse run of a bottom-lane union passes.
+    expect(union?.marksY).toBeGreaterThan(union?.y ?? 0);
   });
 });
 

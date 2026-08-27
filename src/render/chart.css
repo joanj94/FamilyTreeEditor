@@ -52,6 +52,7 @@
 .person .name,
 .person .marks,
 .ordinal,
+.union-marks,
 .toggle .hiding {
   font-family: inherit;
   fill: var(--chart-text, #2c2822);
@@ -88,6 +89,22 @@
 .union-ordinal {
   text-anchor: middle;
   fill: var(--chart-text, #2c2822);
+  stroke: var(--chart-bg, #fbfaf7);
+  stroke-width: 3;
+  paint-order: stroke fill;
+}
+
+/* What the union itself says: `=` and `≠` with the year of each, set below the dot and out to
+   its right -- see `marksX`, which explains why every other side of a dot was already taken.
+   `text-anchor: start` so the line grows away from the dot rather than towards both partners.
+
+   Knocked out of what it crosses, like the number above it. Nothing measures this line -- a dot
+   has no box to be sized to it -- so on a tight row it can reach the right-hand partner's drop,
+   and a date with a connector through it is a date a reader cannot trust. */
+.union-marks {
+  font-size: 12px;
+  text-anchor: start;
+  fill: var(--chart-text-dim, #6f665c);
   stroke: var(--chart-bg, #fbfaf7);
   stroke-width: 3;
   paint-order: stroke fill;
