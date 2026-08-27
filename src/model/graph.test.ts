@@ -204,24 +204,76 @@ describe('cost as the document grows', () => {
     return { header: { gedcomVersion: '7.0' }, individuals, families };
   };
 
-  /** Walk every person's parent families, which is the shape `audit()` traverses. */
-  const walk = (doc: GedcomDoc): number => {
-    const index = indexDoc(doc);
-    const start = performance.now();
-    for (const individual of doc.individuals) parentFamiliesOf(index, individual.xref);
-    return performance.now() - start;
+  /**
+   * A map that counts the reads made through it, including the reads a scan would make.
+   *
+   * Cost is asserted here by counting work rather than by timing it. A stopwatch inside a suite
+   * that runs its files in parallel measures the load on the machine as much as the algorithm:
+   * timing this walk across a few tenths of a millisecond produced ratios between 1.2 and 4.4 on
+   * an idle machine, and widening it to milliseconds still failed under a full run. A count is
+   * the same number on every machine.
+   */
+  class CountingMap<K, V> extends Map<K, V> {
+    reads = 0;
+
+    override get(key: K): V | undefined {
+      this.reads += 1;
+      return super.get(key);
+    }
+
+    override has(key: K): boolean {
+      this.reads += 1;
+      return super.has(key);
+    }
+
+    /* Reading the collection whole is the shape this test exists to catch, and it costs one read
+       per entry however it is spelled. */
+    override [Symbol.iterator](): MapIterator<[K, V]> {
+      this.reads += this.size;
+      return super[Symbol.iterator]();
+    }
+
+    override keys(): MapIterator<K> {
+      this.reads += this.size;
+      return super.keys();
+    }
+
+    override values(): MapIterator<V> {
+      this.reads += this.size;
+      return super.values();
+    }
+
+    override entries(): MapIterator<[K, V]> {
+      this.reads += this.size;
+      return super.entries();
+    }
+  }
+
+  /**
+   * The reads that walking every person's parent families costs, per person. That walk is the
+   * shape `audit()` traverses, and the index is what it has to go through to answer.
+   */
+  const readsPerPerson = (people: number): number => {
+    const doc = forest(people);
+    const built = indexDoc(doc);
+    const individuals = new CountingMap(built.individuals);
+    const families = new CountingMap(built.families);
+    const claimedAsChild = new CountingMap(built.claimedAsChild);
+
+    for (const individual of doc.individuals) {
+      parentFamiliesOf({ individuals, families, claimedAsChild, doc }, individual.xref);
+    }
+    return (individuals.reads + families.reads + claimedAsChild.reads) / doc.individuals.length;
   };
 
   it('grows with the document rather than with its square', () => {
-    const small = forest(2000);
-    const large = forest(4000);
-
-    // Warm both paths so the first measurement is not paying for compilation.
-    walk(small);
-    walk(large);
-
-    const ratio = (walk(large) + 0.01) / (walk(small) + 0.01);
-    expect(ratio).toBeLessThan(2.5);
+    /* The regression this guards is the one described on `claimedAsChild`: answering "which
+       families claim this person" by scanning every family made `audit()` quadratic in the size
+       of the file. What keeps the whole walk linear is that one person costs the same handful of
+       reads whatever the document around them -- a scan would cost one read per family, which is
+       in the hundreds at the smaller size here and twenty times that at the larger. */
+    expect(readsPerPerson(2000)).toBeLessThan(10);
+    expect(readsPerPerson(40_000)).toBeLessThan(10);
   });
 
   it('answers from the index rather than by scanning the families', () => {
