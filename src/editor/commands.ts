@@ -16,6 +16,7 @@
  * operations already refuse impossible links; this is the outer belt.
  */
 import { audit, auditErrors } from '../model/audit.js';
+import { sortByBirth } from '../model/sort.js';
 import { validateDoc } from '../model/validate.js';
 import {
   OperationError,
@@ -118,6 +119,26 @@ export function apply(history: History, command: Command): Applied {
     ok: true,
     history: commit(history, result.doc, command.label),
     ...(result.created === undefined ? {} : { created: result.created }),
+  };
+}
+
+/**
+ * Put the whole document in the order things happened.
+ *
+ * One command rather than one per family, because it is one thing the user asked for: stepping
+ * back through a hundred reordered sibling lists is not an undo anybody wants. It reorders lists
+ * whose order GEDCOM attaches no meaning to and rewrites no pointer, so the gates in `apply` have
+ * nothing to object to -- they run anyway, since a sort that somehow broke a link is exactly the
+ * fault worth catching before it reaches the undo stack rather than after.
+ *
+ * The sort runs again here rather than closing over a document computed elsewhere. It is
+ * idempotent, so the second run costs a comparison per record and buys the command the property
+ * every other one in this file has: it is a pure function of the document it is handed.
+ */
+export function sortByBirthDate(): Command {
+  return {
+    label: ref('command.sortByBirth'),
+    run: (doc) => ({ doc: sortByBirth(doc).doc }),
   };
 }
 

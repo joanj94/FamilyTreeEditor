@@ -25,6 +25,7 @@
 import { countCrossings } from './crossings.js';
 import { childBlocks, pack, placeUnions, spread, type BlockOrder } from './pack.js';
 import { spousesOf, unionsOf, type Relations } from './relations.js';
+import { olderFirst } from '../model/chronology.js';
 import type { Blocks } from './blocks.js';
 import type { Xref } from '../model/types.js';
 
@@ -135,8 +136,9 @@ function matesOf(blocks: Blocks, relations: Relations, anchor: Xref): readonly X
  *
  * A block goes near the average x of the blocks it marries into; one that marries nowhere stays
  * where it is, which is what keeps a sweep from shuffling an already tidy family for nothing.
- * Ties fall back to current position and then to xref, so the answer cannot depend on the order a
- * map happened to iterate in.
+ * Ties fall back to current position, then to birth, then to xref -- so a sweep that has no
+ * opinion leaves the elder on the left, and the answer still cannot depend on the order a map
+ * happened to iterate in.
  */
 function swept(
   blocks: Blocks,
@@ -171,11 +173,13 @@ function swept(
     return found;
   };
 
+  const older = olderFirst(relations.born);
   const sorted = (list: readonly Xref[]): readonly Xref[] =>
     [...list].sort(
       (left, right) =>
         towards(left) - towards(right) ||
         at(left) - at(right) ||
+        older(left, right) ||
         (left < right ? -1 : left > right ? 1 : 0),
     );
 

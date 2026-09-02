@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The five notices, and whether anything says them out loud.
+ * The six notices, and whether anything says them out loud.
  *
  * A failure interrupts -- what the user asked for did not happen -- so it is an `alert`. The rest
  * are results of what they just did and can wait for a pause in speech, so they are a `status`.
@@ -32,6 +32,7 @@ const quiet = {
   saveFailure: null,
   refused: null,
   saved: null,
+  sorted: null,
 };
 
 beforeEach(() => {
@@ -126,6 +127,34 @@ describe('results wait their turn', () => {
     expect(region?.textContent).toContain('SEX value X');
     /* The record is named `I1`; the `@`s are the file's delimiters and say nothing to a reader. */
     expect(region?.textContent).toContain('(I1)');
+  });
+
+  it('announces a sort, assembling its parts into one sentence', () => {
+    // Two refs rather than one sentence, for the same reason a refusal is in pieces: the sort has
+    // something to say about what it reordered and something about who it could not place, and
+    // neither should be frozen into English upstream of here.
+    show({
+      ...quiet,
+      sorted: [
+        ref('notices.sorted'),
+        ref('notices.sortedFamilies', { count: 2 }),
+        ref('notices.sortedUndated', { count: 1 }),
+      ],
+    });
+
+    const region = container.querySelector('.sorted');
+    expect(region?.getAttribute('role')).toBe('status');
+    expect(region?.textContent).toContain('2 families');
+    expect(region?.textContent).toContain('1 person has no birth date');
+  });
+
+  it('says only the parts that have something to say', () => {
+    // A sort that reordered no children still moved records and marriages, so the headline stands
+    // alone rather than carrying a count of zero.
+    show({ ...quiet, sorted: [ref('notices.sorted')] });
+    expect(container.querySelector('.sorted')?.textContent).toBe(
+      'Sorted by birth date: children, records and marriages are now in the order they happened.',
+    );
   });
 
   it('shows an export that lost nothing without an empty list beneath it', () => {

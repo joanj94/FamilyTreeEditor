@@ -1,14 +1,15 @@
 /**
  * The band of things the shell needs to tell the user.
  *
- * Five kinds of message, and each is announced rather than merely drawn. They appear in response
+ * Six kinds of message, and each is announced rather than merely drawn. They appear in response
  * to something the user did and then sit there silently, which for anybody using a screen reader
  * means they may as well not exist: pressing **Save GEDCOM 5.5.1** and being told nothing about the
  * `SEX X` that could not be carried is the same experience as an export that lost it quietly.
  *
  * `alert` for the three failures, because a file that would not open, a file that would not be
  * written or a tree that could not be stored interrupts what the user was doing. `status` for the
- * rest, which are the results of what they just asked for and can wait for a pause in speech.
+ * rest -- a refusal, an export, a sort -- which are the results of what they just asked for and can
+ * wait for a pause in speech.
  *
  * **This is where prose is made.** Everything arriving here is a `MessageRef` or a raw detail
  * string; the sentences are assembled at this edge, in the language current when they are read.
@@ -37,9 +38,24 @@ export interface NoticesProps {
   readonly refused: Refusal | null;
   /** What the last export did, and what the format could not carry. */
   readonly saved: Saved | null;
+  /**
+   * What the last sort did, in parts.
+   *
+   * Parts rather than one sentence, for the reason `Refusal` is in parts: a sort says two things
+   * -- what it reordered, and who it could say nothing about -- and the second only sometimes.
+   * Assembling them here keeps both in whatever language is current when they are read.
+   */
+  readonly sorted: readonly MessageRef[] | null;
 }
 
-export function Notices({ failed, storeFailure, saveFailure, refused, saved }: NoticesProps) {
+export function Notices({
+  failed,
+  storeFailure,
+  saveFailure,
+  refused,
+  saved,
+  sorted,
+}: NoticesProps) {
   const t = useT();
 
   return (
@@ -68,6 +84,11 @@ export function Notices({ failed, storeFailure, saveFailure, refused, saved }: N
           ]
             .filter((part) => part !== '')
             .join(' ')}
+        </p>
+      )}
+      {sorted === null ? null : (
+        <p className="sorted" role="status">
+          {sorted.map((part) => t(part)).join(' ')}
         </p>
       )}
       {saved === null ? null : (

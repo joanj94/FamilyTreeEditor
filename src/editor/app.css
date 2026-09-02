@@ -286,6 +286,7 @@ body {
 .actions button,
 .steps button,
 .saves button,
+.tidy button,
 .close {
   padding: 0.3rem 0.7rem;
   border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
@@ -299,7 +300,8 @@ body {
 
 .actions button:disabled,
 .steps button:disabled,
-.saves button:disabled {
+.saves button:disabled,
+.tidy button:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -310,9 +312,21 @@ body {
 }
 
 .steps,
-.saves {
+.saves,
+.tidy {
   display: flex;
   gap: 0.35rem;
+}
+
+/* What a sort did, reported in the same quiet register as a save: it is the result of something
+   the user asked for, not a warning. The count of people it could say nothing about belongs here
+   rather than in a console, because it is the number that explains why part of the chart did not
+   move. */
+.sorted {
+  margin: 0;
+  padding: 0.6rem 1.25rem;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  font-size: 0.9rem;
 }
 
 /* A save is the moment the user's own file is replaced, so what the format could not carry is

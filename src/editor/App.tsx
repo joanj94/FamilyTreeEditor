@@ -28,6 +28,7 @@ import { importGedcom, type ImportIssue } from '../gedcom/mapper.js';
 import { audit, type AuditFinding } from '../model/audit.js';
 import { indexDoc } from '../model/graph.js';
 import { lineageOf } from '../model/lineage.js';
+import { sortByBirth } from '../model/sort.js';
 import { useLanguage } from '../i18n/context.js';
 import { ref, type MessageRef } from '../i18n/keys.js';
 import { Chart } from '../render/Chart.js';
@@ -41,7 +42,7 @@ import { handOver } from './handOver.js';
 import { prepareDownload } from './save.js';
 import { UnionPanel } from './UnionPanel.js';
 import { NEW_TREE_LABEL, NEW_TREE_NAME, blankTree } from './blank.js';
-import { apply, type Command, type Refusal } from './commands.js';
+import { apply, sortByBirthDate, type Command, type Refusal } from './commands.js';
 import { useTreeStore } from './persistence.js';
 import { hasUnwrittenWork, keptSummary } from './unsaved.js';
 import { begin, redo, undo, type History } from './history.js';
@@ -69,6 +70,9 @@ export function App() {
   const [refused, setRefused] = useState<Refusal | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
   const [saveFailure, setSaveFailure] = useState<MessageRef | null>(null);
+  /* What the last sort did, kept in pieces so the sentence is assembled in the language it is
+     read in rather than in the one it was current in. See `Notices`. */
+  const [sorted, setSorted] = useState<readonly MessageRef[] | null>(null);
   const [chosen, setChosen] = useState<Xref | null>(null);
   /* Somebody the reader has asked to be taken to, as opposed to somebody they have merely
      selected. A fresh object each time, because the chart pans on the identity rather than on the
@@ -88,6 +92,7 @@ export function App() {
     setFailed(null);
     setRefused(null);
     setSaved(null);
+    setSorted(null);
     setSaveFailure(null);
     file
       .arrayBuffer()
@@ -118,6 +123,7 @@ export function App() {
   const run = useCallback((command: Command) => {
     // The last save described a document that no longer exists, so the report goes with it.
     setSaved(null);
+    setSorted(null);
     setOpened((current) => {
       if (current === null) return current;
       const outcome = apply(current.history, command);
@@ -134,6 +140,7 @@ export function App() {
   const step = useCallback((direction: 'undo' | 'redo') => {
     setRefused(null);
     setSaved(null);
+    setSorted(null);
     setOpened((current) =>
       current === null
         ? current
@@ -143,6 +150,42 @@ export function App() {
           },
     );
   }, []);
+
+  /**
+   * Put the document in the order things happened, and say what that did.
+   *
+   * The sort is run here as well as inside the command, and the second run is what pays for the
+   * report: `apply` hands back a history, not a description of the edit, and a user pressing this
+   * is owed an answer -- above all the count of people it could say nothing about, which is the
+   * honest measure of how much of their chart actually moved.
+   *
+   * A document already in order records no step. Undo is for reversing edits, and an edit that
+   * changed nothing is not one a user should have to step back through to reach the one before it.
+   *
+   * `run` clears the notice, so the report is set after it rather than before: both land in the
+   * same batch, and the later call is the one that survives.
+   */
+  const sort = useCallback(() => {
+    if (opened === null) return;
+    const report = sortByBirth(opened.history.present.doc);
+    if (report.changed) run(sortByBirthDate());
+    setSorted(
+      report.changed
+        ? [
+            ref('notices.sorted'),
+            /* Both counts are conditional, and for the same reason: a sort that reordered no
+               children still moved records and marriages, and "0 families reordered" would read
+               as though nothing had happened. A part with nothing to say is left out. */
+            ...(report.familiesReordered === 0
+              ? []
+              : [ref('notices.sortedFamilies', { count: report.familiesReordered })]),
+            ...(report.undated === 0
+              ? []
+              : [ref('notices.sortedUndated', { count: report.undated })]),
+          ]
+        : [ref('notices.sortedAlready')],
+    );
+  }, [opened, run]);
 
   /**
    * Write the document out, wherever the user says.
@@ -162,6 +205,7 @@ export function App() {
       const file = prepareDownload(document_, opened.name, format);
       setSaveFailure(null);
       setSaved(null);
+      setSorted(null);
 
       /* The dialog's own label is the one place the operating system reads our words back to the
          user, so it is rendered here rather than left as a reference `handOver` cannot resolve. */
@@ -210,6 +254,7 @@ export function App() {
     setFailed(null);
     setRefused(null);
     setSaved(null);
+    setSorted(null);
     setSaveFailure(null);
     const { doc: fresh, first } = blankTree();
     setOpened({
@@ -229,6 +274,7 @@ export function App() {
       setFailed(null);
       setRefused(null);
       setSaved(null);
+      setSorted(null);
       setSaveFailure(null);
       void store
         .reopen(id)
@@ -373,6 +419,7 @@ export function App() {
         kept={keptLine}
         notWrittenBack={doc !== exported}
         onStep={step}
+        onSort={sort}
         onSave={save}
       />
 
@@ -382,6 +429,7 @@ export function App() {
         saveFailure={saveFailure}
         refused={refused}
         saved={saved}
+        sorted={sorted}
       />
 
       {opened === null || doc === undefined ? (

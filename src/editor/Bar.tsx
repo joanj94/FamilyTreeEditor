@@ -56,6 +56,14 @@ export interface BarProps {
   /** True where the document on screen differs from the one last written to a file. */
   readonly notWrittenBack: boolean;
   readonly onStep: (direction: 'undo' | 'redo') => void;
+  /**
+   * Put the document in the order things happened.
+   *
+   * A button rather than something done on import: the order a file arrives in is the previous
+   * program's, and silently rewriting it would mean a user who exports without editing gets back a
+   * file that differs from the one they opened.
+   */
+  readonly onSort: () => void;
   readonly onSave: (format: SaveFormat) => void;
 }
 
@@ -77,6 +85,7 @@ export function Bar({
   kept,
   notWrittenBack,
   onStep,
+  onSort,
   onSave,
 }: BarProps) {
   const { t, locale, setLocale } = useLanguage();
@@ -145,6 +154,11 @@ export function Bar({
                 onStep('redo');
               }}
             />
+          </span>
+          <span className="tidy">
+            <button type="button" title={t('bar.sort.title')} onClick={onSort}>
+              {t('bar.sort')}
+            </button>
           </span>
           <span className="saves">
             <button

@@ -28,6 +28,7 @@ import {
   editPerson,
   editUnion,
   setPartnerTo,
+  sortByBirthDate,
   type Command,
 } from './commands.js';
 import {
@@ -281,6 +282,52 @@ describe('undo and redo', () => {
   });
 });
 
+describe('sorting the document', () => {
+  const dated = (xref: string, year?: number) => ({
+    xref,
+    ...(year === undefined
+      ? {}
+      : {
+          events: [
+            {
+              tag: 'BIRT' as const,
+              date: {
+                value: String(year),
+                kind: 'EXACT' as const,
+                start: { calendar: 'GREGORIAN', year },
+              },
+            },
+          ],
+        }),
+    familiesAsChild: [{ xref: '@F1@' }],
+  });
+
+  /** Three siblings recorded youngest first, one of them with no date at all. */
+  const jumbled: GedcomDoc = {
+    header: { gedcomVersion: '7.0' },
+    individuals: [dated('@I1@', 1895), dated('@I2@', 1890), dated('@I3@')],
+    families: [{ xref: '@F1@', children: ['@I1@', '@I2@', '@I3@'] }],
+  };
+
+  it('reorders the children and passes both gates', () => {
+    const after = accept(begin(jumbled), sortByBirthDate());
+    expect(after.history.present.doc.families[0]?.children).toEqual(['@I2@', '@I1@', '@I3@']);
+    sound(after.history.present.doc);
+  });
+
+  it('is one step, and undo puts every list back', () => {
+    // The sort touches the whole document, so the thing worth asserting is that stepping back
+    // once returns all of it -- not the family the user happened to be looking at.
+    const start = begin(jumbled);
+    const after = accept(start, sortByBirthDate());
+    expect(undo(after.history).present.doc).toBe(jumbled);
+  });
+
+  it('names itself for the undo menu', () => {
+    expect(say(sortByBirthDate().label)).toBe('Sort by birth date');
+  });
+});
+
 describe('the invariant every edit holds', () => {
   it('never records a document that fails either gate, whatever the sequence', () => {
     const step = fc.constantFrom(
@@ -294,6 +341,7 @@ describe('the invariant every edit holds', () => {
       'clearPartner',
       'deletePerson',
       'deleteUnion',
+      'sortByBirth',
       'undo',
       'redo',
     );
@@ -337,6 +385,8 @@ describe('the invariant every edit holds', () => {
                   return person === undefined ? null : deletePerson(person);
                 case 'deleteUnion':
                   return family === undefined ? null : deleteUnion(family);
+                case 'sortByBirth':
+                  return sortByBirthDate();
                 default:
                   return null;
               }

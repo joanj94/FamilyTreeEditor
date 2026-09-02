@@ -14,6 +14,7 @@
  * document that has been through `audit()` has none; one that has just been imported may, and the
  * drawing has to come up anyway.
  */
+import { birthIndex, type TimeKey } from '../model/chronology.js';
 import { isVoid, partnersOf } from '../model/graph.js';
 import type { GedcomDoc, Xref } from '../model/types.js';
 
@@ -29,6 +30,15 @@ export interface Relations {
   readonly familiesOf: ReadonlyMap<Xref, readonly Xref[]>;
   /** Person to the one family their descent is drawn from. */
   readonly parentFamily: ReadonlyMap<Xref, Xref>;
+  /**
+   * Person to when they were born, where the record says.
+   *
+   * Carried here rather than looked up from the document, because the ordering passes are
+   * handed a `Relations` and nothing else -- and they need it only as a tie-break, for which
+   * re-reading every individual at every comparison would be absurd. Absent for anyone whose
+   * birth this cannot read; see `model/chronology.ts` for what that covers.
+   */
+  readonly born: ReadonlyMap<Xref, TimeKey>;
 }
 
 function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
@@ -83,7 +93,15 @@ export function readRelations(doc: GedcomDoc): Relations {
     }
   }
 
-  return { persons, families, spouses, children, familiesOf, parentFamily };
+  return {
+    persons,
+    families,
+    spouses,
+    children,
+    familiesOf,
+    parentFamily,
+    born: birthIndex(doc),
+  };
 }
 
 /** The partners of a family, or an empty list where it has none. */

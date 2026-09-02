@@ -25,6 +25,7 @@
  * Between them, both unions join a neighbour and cross nothing.
  */
 import { childrenOf, spousesOf, unionsOf, type Relations } from './relations.js';
+import { olderFirst } from '../model/chronology.js';
 import type { Xref } from '../model/types.js';
 
 /**
@@ -192,11 +193,18 @@ export function buildBlocks(relations: Relations, depth: ReadonlyMap<Xref, numbe
      the other, so seeding alphabetically let a spouse anchor a twice-married partner -- which
      puts the second union in a block of its own and reproduces exactly the reaching-over
      connector this ordering exists to prevent. */
+  const older = olderFirst(relations.born);
   const seeds = relations.persons
     .filter((person) => !relations.parentFamily.has(person))
     .sort((left, right) => {
       const byUnions = unionsOf(relations, right).length - unionsOf(relations, left).length;
       if (byUnions !== 0) return byUnions;
+      /* Then the elder, so a chart of equally-married founders reads oldest first. This decides
+         nothing the crossing count has an opinion about -- it is reached only where the rule above
+         is indifferent -- and the identifier stays underneath it for the undated, who would
+         otherwise be left to whatever order the filter happened to produce. */
+      const byBirth = older(left, right);
+      if (byBirth !== 0) return byBirth;
       return left < right ? -1 : left > right ? 1 : 0;
     });
   for (const person of seeds) walk(person);
@@ -223,14 +231,18 @@ export function buildBlocks(relations: Relations, depth: ReadonlyMap<Xref, numbe
     owned.get(anchor)?.push(family);
   }
   for (const list of owned.values()) {
+    /* Ties are left to the sort's stability rather than broken by identifier, and the difference is
+       visible: the unions of one twice-married person all share a first spouse, so `byOrder` says
+       nothing about them and the identifier used to decide which marriage was drawn first. The
+       list was built by walking `relations.families`, so stability instead keeps the order the
+       document itself gives -- which `model/sort.ts` puts in the order the marriages happened. */
     list.sort((left, right) => {
       const leftFirst = spousesOf(relations, left)[0];
       const rightFirst = spousesOf(relations, right)[0];
-      const byOrder =
+      return (
         (leftFirst === undefined ? 0 : (order.get(leftFirst) ?? 0)) -
-        (rightFirst === undefined ? 0 : (order.get(rightFirst) ?? 0));
-      if (byOrder !== 0) return byOrder;
-      return left < right ? -1 : left > right ? 1 : 0;
+        (rightFirst === undefined ? 0 : (order.get(rightFirst) ?? 0))
+      );
     });
   }
 
